@@ -21,7 +21,7 @@ export interface ClientSessionContext {
 }
 
 /** Trigger character a source binds to. */
-export type TriggerChar = '/' | '@'
+export type TriggerChar = '/' | '@' | '#'
 
 /** Where the trigger token sits in the draft: leading (trimmed draft starts with it) or inline. */
 export type TriggerPosition = 'leading' | 'inline'
@@ -32,6 +32,8 @@ export type PickVia = 'menu' | 'space' | 'enter'
 /** One menu candidate. Pure display data — zero behavior declaration. */
 export interface InputTriggerCandidate {
   readonly name: string
+  /** Stable source-owned reference payload used when this candidate is picked. */
+  readonly ref?: string
   readonly description?: string
   readonly icon?: string
   readonly hint?: string
@@ -82,8 +84,9 @@ export interface CommandClaim {
 }
 
 /**
- * Inline reference insertion. The draft holds the complete display text while
- * the occurrence retains its range; the owner supplies both user-facing projections at insert time
+ * Inline reference insertion. The draft holds one placeholder char per
+ * occurrence (U+FFF9–U+FFFC width classes, picked from the label at insert
+ * time); the owner supplies both user-facing projections at insert time
  * (the model representation is serialized on submit via the source codec).
  */
 export interface ReferenceInsert {

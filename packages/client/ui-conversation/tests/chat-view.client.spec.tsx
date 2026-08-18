@@ -272,6 +272,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
     inputActions: {
       setDraft: () => {},
       addImages: () => true,
+      appendReference: () => true,
       removeImage: () => {},
       pruneImages: () => {},
       submit: () => {},

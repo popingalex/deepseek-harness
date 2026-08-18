@@ -272,7 +272,6 @@
     animation: none;
   }
 }
-
 /* Inline references use domain glyphs and business-color text without another
    container inside the user bubble. */
 .refChip {
@@ -289,3 +288,4 @@
 .refIcon {
   flex: none;
 }
+

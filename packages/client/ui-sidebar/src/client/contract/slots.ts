@@ -33,6 +33,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * registers the browser.
      */
     'sidebar.workspaces': { kind: 'single'; scope: 'root'; owner: SidebarSectionOwnerProps }
+    /** Optional action rendered beside the New Session action. */
+    'sidebar.create.action': { kind: 'list'; scope: 'root'; owner: SidebarCreateActionOwnerProps }
     /**
      * The settings seat at the sidebar foot. Declared by this package's
      * 'sidebar' entry; ui-settings registers its trigger row + modal panel.
@@ -68,6 +70,13 @@ export interface SidebarSectionOwnerProps {
   wide: boolean
   /** Rail icons request expansion; the browser rides the wide flip for focus. */
   expandSidebar: () => void
+}
+
+export interface SidebarCreateActionOwnerProps {
+  /** Whether the sidebar renders its expanded content. */
+  wide: boolean
+  /** The shell's New Session button class, shared to preserve its visual style. */
+  actionClassName: string
 }
 
 /**
@@ -112,6 +121,7 @@ export type SidebarRootComponentProps =
     | 'sidebar.brand.mark'
     | 'sidebar.brand.name'
     | 'sidebar.workspaces'
+    | 'sidebar.create.action'
     | 'sidebar.settings'
     | 'sidebar.footer.action'
   >

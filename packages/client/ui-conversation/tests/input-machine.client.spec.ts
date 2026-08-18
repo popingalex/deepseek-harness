@@ -756,15 +756,7 @@ describe('input-machine: decorations', () => {
     m.dispatch({ type: 'set-invalid', invalidIds: [1] })
     expect(deriveDecorations(m.state)).toEqual({
       token: null,
-      chips: [{
-        occurrenceId: 1,
-        offset: 0,
-        length: referenceDraftText(reference).length,
-        text: referenceDraftText(reference),
-        label: 'alpha',
-        appearance: 'file',
-        invalid: true,
-      }],
+      chips: [{ occurrenceId: 1, offset: 0, label: 'alpha', source: 'skill', invalid: true }],
       textRefs: [],
       hint: null,
     })

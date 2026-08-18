@@ -24,7 +24,10 @@ import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ComposerBarProps } from '../contract/slots.ts'
 import { deriveDecorations } from '../input/decorations.ts'
 import type { DraftDecorations } from '../input/decorations.ts'
-import { attachmentErrorText, imageSizeText } from '../image-labels.ts'
+import { PLACEHOLDER } from '../input/machine.ts'
+import {
+  attachmentErrorText, attachmentRailLabels, dropOverlayLabels, imageSizeText, lightboxLabels,
+} from '../image-labels.ts'
 import { ReferenceIcon } from '../reference/ReferenceIcon.tsx'
 import { ContextMeter } from './ContextMeter.tsx'
 import { PermissionSelect } from './PermissionSelect.tsx'
@@ -546,27 +549,25 @@ export function InputBar({
       if (b.kind === 'chip') {
         const chip = b.chip
         backdrop.push(
+          // The transparent inline cell renders the chip's own placeholder
+          // char (U+FFF9–U+FFFC width classes), so its advance equals the
+          // textarea's exactly; the label is a clipped overlay that never
+          // affects layout.
           <span
             key={`chip-${chip.occurrenceId}`}
             className={clsx(css.chip, chip.invalid && css.chipInvalid)}
             data-decoration="chip"
             data-reference-appearance={chip.appearance}
             data-occurrence={chip.occurrenceId}
+            data-reference-source={chip.source}
             data-invalid={chip.invalid || undefined}
             title={chip.label}
           >
-            {chip.appearance === undefined
-              ? chip.text[0]
-              : (
-                <span className={css.chipTrigger}>
-                  <span className={css.chipTriggerGlyph}>{chip.text[0]}</span>
-                  <ReferenceIcon kind={chip.appearance} size={16} className={css.chipIcon} />
-                </span>
-              )}
-            <span>{chip.text.slice(1)}</span>
+            <span className={css.chipCell} aria-hidden>{draft[chip.offset] ?? PLACEHOLDER}</span>
+            <span className={css.chipLabel}>{chip.label}</span>
           </span>,
         )
-        cursor = chip.offset + chip.length
+        cursor = chip.offset + 1
       } else {
         // Plain-range highlight: the glyphs stay the
         // textarea's (advance untouched); the mark paints the chip look.

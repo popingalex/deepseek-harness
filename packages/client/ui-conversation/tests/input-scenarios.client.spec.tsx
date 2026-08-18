@@ -18,6 +18,7 @@ import { InputTriggerService } from '@deepseek-ai/dsh-client-ui-input-trigger/cl
 import type {
   ClientSessionContext, CommandClaim, PickOutcome, SubmitEnvelope, SubmitImageAttachment, SubmitOutcome,
 } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
+import { placeholderForLabel } from '../src/client/input/machine.ts'
 import { FakeApiClient, fakeRemote, ok } from '../../runtime/tests/fake-api.client.ts'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -307,6 +308,43 @@ describe('scenario H: backspace breaks the token', () => {
     b.type('/goa ')
     expect(b.shell.snapshot.phase).toBe('plain')
     expect(b.view.container.querySelector('[data-decoration="token"]')).toBeNull()
+  })
+})
+
+describe('structured reference action', () => {
+  it('appends one occurrence and serializes it through the registered source codec', async () => {
+    const b = await scopedBench((inputTriggers) => {
+      inputTriggers.registerSource({
+        trigger: '@',
+        name: 'eh-reference',
+        candidates: () => Promise.resolve([]),
+        onPick: () => undefined,
+        codec: {
+          clipboardText: () => '东门 (121.100000, 31.200000)',
+          serialize: ref => Promise.resolve(`[[EH_REF_V1:${ref}]]`),
+        },
+      })
+    })
+    const envelope = '{"kind":"location","id":"geo-internal","name":"东门","location":{"longitude":121.1,"latitude":31.2}}'
+
+    act(() => {
+      b.shell.actions.setDraft('请前往 ')
+      b.shell.actions.appendReference({
+        source: 'eh-reference',
+        ref: envelope,
+        label: '东门 (121.100000, 31.200000)',
+        clipboardText: '东门 (121.100000, 31.200000)',
+      })
+    })
+
+    expect(b.shell.snapshot.draft).toBe(`请前往 ${placeholderForLabel('东门 (121.100000, 31.200000)')} `)
+    expect(b.shell.snapshot.occurrences).toHaveLength(1)
+    expect(b.view.container.querySelector('[data-reference-source="eh-reference"]')?.textContent)
+      .toContain('东门 (121.100000, 31.200000)')
+    act(() => { b.shell.actions.submit() })
+    await vi.waitFor(() => {
+      expect(b.sink).toHaveBeenCalledWith(`请前往 [[EH_REF_V1:${envelope}]]`, [], 'queue')
+    })
   })
 })
 

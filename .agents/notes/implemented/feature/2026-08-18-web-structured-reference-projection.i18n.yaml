@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-18-web-structured-reference-projection.md
+2026-08-18-web-structured-reference-projection.md: 8e8221aea7bd3e2ca5b145abaa6ed2009c5ebf38
+2026-08-18-web-structured-reference-projection.zh.md: ed2ae90a37d21993b6104c0b50584ff69b1abc73

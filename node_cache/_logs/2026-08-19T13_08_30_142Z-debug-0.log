@@ -1,0 +1,19 @@
+0 verbose cli /opt/homebrew/Cellar/node/25.2.1/bin/node /opt/homebrew/bin/npm
+1 info using npm@11.6.2
+2 info using node@v25.2.1
+3 silly config load:file:/opt/homebrew/lib/node_modules/npm/npmrc
+4 warn Unknown env config "store-dir". This will stop working in the next major version of npm.
+5 silly config load:file:/Users/alexxu/workspace/emergency-harness/20260814/deepseek-harness/.npmrc
+6 silly config load:file:/Users/alexxu/.npmrc
+7 silly config load:file:/opt/homebrew/etc/npmrc
+8 verbose title npm run build:lib:host
+9 verbose argv "run" "build:lib:host"
+10 verbose logfile logs-max:10 dir:/Users/alexxu/workspace/emergency-harness/20260814/deepseek-harness/node_cache/_logs/2026-08-19T13_08_30_142Z-
+11 verbose logfile /Users/alexxu/workspace/emergency-harness/20260814/deepseek-harness/node_cache/_logs/2026-08-19T13_08_30_142Z-debug-0.log
+12 silly logfile done cleaning log files
+13 verbose cwd /Users/alexxu/workspace/emergency-harness/20260814/deepseek-harness
+14 verbose os Darwin 25.5.0
+15 verbose node v25.2.1
+16 verbose npm  v11.6.2
+17 verbose exit 0
+18 info ok

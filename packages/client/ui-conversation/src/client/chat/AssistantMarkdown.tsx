@@ -12,7 +12,7 @@
 import { Fragment, memo, useMemo } from 'react'
 import type { ReactNode } from 'react'
 import type { AssistantBlock } from '@deepseek-ai/dsh-client-runtime/client'
-import { JsonBlock, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { JsonBlock, MarkdownText, ReferenceText } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MarkdownFileMentions } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatNodeOwnerProps, ChatViewSlotProps } from '../contract/slots.ts'
 import { ReasoningRow } from './ReasoningRow.tsx'
@@ -53,12 +53,17 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
     switch (block.kind) {
       case 'text':
         rendered.push(
-          <MarkdownText
+          <ReferenceText
             key={i}
             text={block.text}
-            streaming={streaming}
-            codeLabels={codeLabels}
-            fileMentions={mentions}
+            renderText={text => (
+              <MarkdownText
+                text={text}
+                streaming={streaming}
+                codeLabels={codeLabels}
+                fileMentions={mentions}
+              />
+            )}
           />,
         )
         break

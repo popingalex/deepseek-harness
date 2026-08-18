@@ -142,6 +142,33 @@ describe('MessageItem arms', () => {
     expect(view.container.textContent).toContain('README.md, please.')
   })
 
+  it('projects structured references in user history without raw wire text or internal ids', () => {
+    const token = '[[EH_REF_V1:{"kind":"asset","id":"asset-row-internal","name":"V-17 转运歧管"}]]'
+    const view = render(
+      <MessageItem t={t} node={{
+        kind: 'user', seq: 1, time: 1_000,
+        content: [{ type: 'text', text: `检查 ${token}` }] as never,
+        source: null,
+      }} />,
+    )
+    expect(view.container.querySelector('[data-reference-chip="asset"]')?.textContent).toBe('V-17 转运歧管')
+    expect(view.container.textContent).not.toContain('EH_REF_V1')
+    expect(view.container.textContent).not.toContain('asset-row-internal')
+  })
+
+  it('projects structured references inside assistant text blocks', () => {
+    const token = '[[EH_REF_V1:{"kind":"fact","id":"fact-row-internal","name":"氯气浓度 120 ppm"}]]'
+    const view = render(<AssistantMarkdown
+      blocks={[{ kind: 'text', text: `监测结果：${token}` }] as never}
+      streaming={false}
+      renderMessageImages={renderMessageImages}
+      t={t}
+    />)
+    expect(view.container.querySelector('[data-reference-chip="fact"]')?.textContent).toBe('氯气浓度 120 ppm')
+    expect(view.container.textContent).not.toContain('EH_REF_V1')
+    expect(view.container.textContent).not.toContain('fact-row-internal')
+  })
+
   it('user bubbles expose clock / copy and neither branch nor edit; copy writes the text', () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', {

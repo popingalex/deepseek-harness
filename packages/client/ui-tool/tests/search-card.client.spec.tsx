@@ -401,6 +401,7 @@ describe('DetailsPanel Output section (search)', () => {
         inputActions={{
           setDraft: () => {},
           addImages: () => true,
+          appendReference: () => true,
           removeImage: () => {},
           pruneImages: () => {},
           submit: () => {},
