@@ -7,6 +7,7 @@ import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts
 import type { RowDragProps } from '../src/client/rows/Rows.tsx'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from '../src/client/rows/Rows.tsx'
 import type { GroupNode, SearchResultNode, SessionNode } from '../src/client/tree.ts'
+import type { EmergencySessionRowMetadata } from '../src/client/emergency-session-rows.ts'
 import { zh } from '../src/client/locales.ts'
 
 afterEach(cleanup)
@@ -57,6 +58,69 @@ function fireDrag(row: HTMLElement, kind: 'dragOver' | 'drop', clientY: number):
 }
 
 describe('workspace browser rows', () => {
+  it('marks standard and emergency-team rows without rendering member avatars', () => {
+    const node: SessionNode = {
+      id: sid('team'), title: 'Response Team', blank: false, running: false,
+      runningSubagentCount: 0, completed: false, updatedAt: 0,
+    }
+    const team: EmergencySessionRowMetadata = {
+      kind: 'team',
+      participants: [
+        { displayName: '现场指挥员', roleName: '指挥协调', status: 'online' },
+        { displayName: '情报研判员', roleName: '情报研判', status: 'working' },
+      ],
+    }
+    const view = render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
+      onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} emergencyMetadata={team} t={t} />)
+    expect(screen.getByRole('treeitem').querySelector('[data-eh-session-badge="team"]')).toBeTruthy()
+    expect(screen.getByText('2').getAttribute('data-eh-session-member-count')).toBe('2')
+    expect(view.container.querySelector('img')).toBeNull()
+
+    view.rerender(<SessionNodeItem node={{ ...node, id: sid('standard') }} currentId={undefined} now={0}
+      onOpen={vi.fn()} onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()}
+      emergencyMetadata={{ kind: 'standard' }} t={t} />)
+    expect(screen.getByRole('treeitem').querySelector('[data-eh-session-badge="standard"]')).toBeTruthy()
+  })
+
+  it('renders a local calendar svg for event sessions in the session-kind slot', () => {
+    const node: SessionNode = {
+      id: sid('event'), title: 'Event Session', blank: false, running: false,
+      runningSubagentCount: 0, completed: false, updatedAt: 0,
+    }
+    const view = render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
+      onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()}
+      emergencyMetadata={{ kind: 'event', participants: [] }} t={t} />)
+
+    const badge = view.container.querySelector('[data-eh-session-badge="event"]')
+    expect(badge?.querySelector('svg[data-eh-event-calendar-icon]')).toBeTruthy()
+  })
+
+  it('shows emergency-team member details on hover and keyboard focus', () => {
+    vi.useFakeTimers()
+    try {
+      const node: SessionNode = {
+        id: sid('team'), title: 'Response Team', blank: false, running: false,
+        runningSubagentCount: 0, completed: false, updatedAt: 0,
+      }
+      const metadata: EmergencySessionRowMetadata = {
+        kind: 'team',
+        participants: [{ displayName: '现场指挥员', roleName: '指挥协调', status: 'online' }],
+      }
+      render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
+        onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} emergencyMetadata={metadata} t={t} />)
+      const row = screen.getByRole('treeitem')
+      fireEvent.pointerEnter(row.parentElement as HTMLElement)
+      act(() => { vi.advanceTimersByTime(500) })
+      expect(document.querySelector('[data-eh-session-members="team"]')?.textContent).toContain('现场指挥员')
+      fireEvent.pointerLeave(row.parentElement as HTMLElement)
+      fireEvent.focus(row)
+      expect(document.querySelector('[data-eh-session-members-focus="team"]')?.textContent).toContain('指挥协调')
+      expect(document.querySelector('[data-eh-session-members-focus="team"]')?.textContent).toContain('online')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('omits only an empty leading status slot in the hierarchy-free flat list', () => {
     const idle: SessionNode = {
       id: sid('flat'), title: 'Flat Session', blank: false, running: false,

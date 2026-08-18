@@ -297,6 +297,7 @@ describe('DetailsPanel Output section (read)', () => {
         inputActions={{
           setDraft: () => {},
           addImages: () => true,
+          appendReference: () => true,
           removeImage: () => {},
           pruneImages: () => {},
           submit: () => {},

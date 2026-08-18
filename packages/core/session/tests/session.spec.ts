@@ -776,6 +776,13 @@ describe('Session', () => {
     expect((event.data.content[0] as { text: string }).text).toBe('original')
   })
 
+  it('persists an explicit ignorable marker on appended extension events', () => {
+    const session = Session.create(SessionId('append-ignorable'))
+    const event = session.append('todo/write', { todos: [] }, { ignorable: true })
+    expect(event.ignorable).toBe(true)
+    expect(session.events[0]?.ignorable).toBe(true)
+  })
+
   it('reads a nested append-data getter once and stores its first JSON value', () => {
     const session = Session.create(SessionId('append-nested-drift'))
     let reads = 0

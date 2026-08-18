@@ -1,0 +1,18 @@
+0 verbose cli /Users/alexxu/.nvm/versions/node/v22.20.0/bin/node /Users/alexxu/.nvm/versions/node/v22.20.0/bin/npm
+1 info using npm@10.9.3
+2 info using node@v22.20.0
+3 silly config load:file:/Users/alexxu/.nvm/versions/node/v22.20.0/lib/node_modules/npm/npmrc
+4 silly config load:file:/Users/alexxu/workspace/emergency-harness/20260814/deepseek-harness/.npmrc
+5 silly config load:file:/Users/alexxu/.npmrc
+6 silly config load:file:/Users/alexxu/.nvm/versions/node/v22.20.0/etc/npmrc
+7 verbose title npm run build:lib:host
+8 verbose argv "run" "build:lib:host"
+9 verbose logfile logs-max:10 dir:/Users/alexxu/workspace/emergency-harness/20260814/deepseek-harness/node_cache/_logs/2026-08-19T02_50_41_802Z-
+10 verbose logfile /Users/alexxu/workspace/emergency-harness/20260814/deepseek-harness/node_cache/_logs/2026-08-19T02_50_41_802Z-debug-0.log
+11 silly logfile done cleaning log files
+12 verbose cwd /Users/alexxu/workspace/emergency-harness/20260814/deepseek-harness
+13 verbose os Darwin 25.5.0
+14 verbose node v22.20.0
+15 verbose npm  v10.9.3
+16 verbose exit 0
+17 info ok

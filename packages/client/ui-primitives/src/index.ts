@@ -49,6 +49,15 @@ export { JsonBlock } from './markdown/JsonBlock.tsx'
 export { MarkdownText } from './markdown/MarkdownText.tsx'
 export type { MarkdownCodeLabels, MarkdownFileMentions } from './markdown/MarkdownText.tsx'
 export { MessageText } from './markdown/MessageText.tsx'
+export { ReferenceChip, ReferenceText } from './ReferenceChip.tsx'
+export type { ReferenceChipProps, ReferenceTextProps } from './ReferenceChip.tsx'
+export {
+  formatStructuredReference, parseStructuredReferences, projectStructuredReferenceText,
+  serializeStructuredReference,
+} from './reference.ts'
+export type {
+  StructuredReference, StructuredReferenceKind, StructuredReferenceLocation, StructuredReferenceSegment,
+} from './reference.ts'
 export { extractMarkdownPlainText } from './markdown/plain-text.ts'
 export type { MarkdownPlainTextMode, MarkdownPlainTextOptions } from './markdown/plain-text.ts'
 export * from './icons/index.tsx'

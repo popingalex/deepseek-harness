@@ -10,12 +10,13 @@ import clsx from 'clsx'
 import {
   HoverCard, IconArchiveOutline20, IconBranchOutline16, IconEditOutline16,
   IconEllipsisOutline16, IconFolderClose16, IconFolderOpen16, IconPlusOutline16,
-  IconTrashOutline16, IconTriangleRightFill14, Menu, StateDot,
+  IconNewChatOutline16, IconTrashOutline16, IconTriangleRightFill14, IconUserOutline16, Menu, StateDot,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { abbreviateHomePath } from '@deepseek-ai/dsh-client-runtime/client'
 import type { WorkspaceBrowserProps } from '../contract/slots.ts'
 import type { GroupNode, SearchResultNode, SessionNode } from '../tree.ts'
+import type { EmergencyParticipantRow, EmergencySessionRowMetadata } from '../emergency-session-rows.ts'
 import { relativeTime } from '../tree.ts'
 import css from './Rows.module.css'
 
@@ -280,8 +281,70 @@ function SessionStatusDots({ statuses }: { statuses: readonly [SessionStatus, ..
   )
 }
 
-/** Hover-card body: full title, relative time, and every relevant live status. */
-function SessionHoverContent({ node, now, t }: { node: SessionNode; now: number; t: RowTranslate }) {
+function EmergencyMembers({ sessionId, participants }: {
+  sessionId: string
+  participants: readonly EmergencyParticipantRow[]
+}) {
+  return (
+    <div className={css.memberList} data-eh-session-members={sessionId}>
+      {participants.map(participant => (
+        <div className={css.memberRow} data-eh-session-member key={`${participant.displayName}:${participant.roleName}`}>
+          <span className={css.memberIdentity}>
+            <strong>{participant.displayName}</strong>
+            <span>{participant.roleName}</span>
+          </span>
+          <span className={css.memberStatus}>{participant.status}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function EventCalendarIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+      data-eh-event-calendar-icon
+    >
+      <path
+        d="M3.25 3.25h9.5v9.5h-9.5zM3.5 6h9M5.5 2v2.5M10.5 2v2.5"
+        stroke="currentColor"
+        strokeWidth="1.25"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function SessionKindIcon({ metadata }: { metadata: EmergencySessionRowMetadata }) {
+  switch (metadata.kind) {
+    case 'team': return <IconUserOutline16 />
+    case 'event': return <EventCalendarIcon />
+    case 'standard': return <IconNewChatOutline16 />
+    default: return assertNever(metadata)
+  }
+}
+
+function sessionKindLabel(metadata: EmergencySessionRowMetadata): string {
+  switch (metadata.kind) {
+    case 'team': return '应急团队会话'
+    case 'event': return '事件会话'
+    case 'standard': return '单人会话'
+    default: return assertNever(metadata)
+  }
+}
+
+function SessionHoverContent({ node, now, emergencyMetadata, t }: {
+  node: SessionNode
+  now: number
+  emergencyMetadata: EmergencySessionRowMetadata | undefined
+  t: RowTranslate
+}) {
   const statuses = sessionStatuses(node, t)
   return (
     <div className={css.hoverContent}>
@@ -295,6 +358,9 @@ function SessionHoverContent({ node, now, t }: { node: SessionNode; now: number;
           <span>{status.label}</span>
         </div>
       ))}
+      {(emergencyMetadata?.kind === 'team' || emergencyMetadata?.kind === 'event') && (
+        <EmergencyMembers sessionId={node.id} participants={emergencyMetadata.participants} />
+      )}
     </div>
   )
 }
@@ -359,7 +425,7 @@ export function SearchResultItem({ result, currentId, onOpen, t }: {
  * @param props.t - the browser root's locale seat.
  * @returns the session row.
  */
-export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork, onArchive, drag, flat = false, t }: {
+export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork, onArchive, drag, flat = false, emergencyMetadata, t }: {
   node: SessionNode
   currentId: string | undefined
   now: number
@@ -374,6 +440,7 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
   drag?: RowDragProps | undefined
   /** The row is rendered without a parent Workspace header. */
   flat?: boolean | undefined
+  emergencyMetadata?: EmergencySessionRowMetadata | undefined
   t: RowTranslate
 }) {
   const row = node
@@ -383,6 +450,11 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
   const primaryStatus = statuses[0]
   const showStatus = primaryStatus.state !== 'done' || row.completed
   const [menuOpen, setMenuOpen] = useState(false)
+  const [focusedTeamPanel, setFocusedTeamPanel] = useState<{ left: number; top: number } | null>(null)
+  const teamParticipants = emergencyMetadata?.kind === 'team' || emergencyMetadata?.kind === 'event'
+    ? emergencyMetadata.participants
+    : undefined
+  const kindLabel = emergencyMetadata === undefined ? '' : sessionKindLabel(emergencyMetadata)
   // Archive hides the row through the registry-global archive set and never
   // touches the session log, so it is not styled as destructive and needs no
   // confirmation dialog.
@@ -402,7 +474,18 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
       )}
       role="treeitem"
       aria-selected={selected}
+      aria-label={emergencyMetadata === undefined
+        ? undefined
+        : `${title}，${kindLabel}${teamParticipants === undefined ? '' : `，${teamParticipants.length} 名成员`}`}
+      tabIndex={teamParticipants === undefined ? undefined : 0}
       onClick={() => { onOpen(node.id) }}
+      onFocus={(event) => {
+        if (teamParticipants === undefined) return
+        const rect = event.currentTarget.getBoundingClientRect()
+        const left = rect.right + 252 <= window.innerWidth ? rect.right + 8 : Math.max(8, window.innerWidth - 252)
+        setFocusedTeamPanel({ left, top: Math.max(8, Math.min(rect.top, window.innerHeight - 200)) })
+      }}
+      onBlur={() => { setFocusedTeamPanel(null) }}
       draggable={drag !== undefined}
       onDragStart={drag === undefined
         ? undefined
@@ -436,7 +519,21 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
           {showStatus && <SessionStatusDots statuses={statuses} />}
         </span>
       )}
+      {emergencyMetadata !== undefined && (
+        <span className={css.sessionKind} data-eh-session-badge={emergencyMetadata.kind} aria-hidden="true">
+          <SessionKindIcon metadata={emergencyMetadata} />
+        </span>
+      )}
       <span className={css.title}>{title}</span>
+      {teamParticipants !== undefined && (
+        <span
+          className={css.memberCount}
+          data-eh-session-member-count={teamParticipants.length}
+          aria-hidden="true"
+        >
+          {teamParticipants.length}
+        </span>
+      )}
       {/* A blank New Session row is a provisional placeholder: nothing has
           happened in it yet, so a "now" timestamp and the row verbs
           (rename/fork/archive) would all act on content that does not
@@ -472,13 +569,25 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
     </div>
   )
   return (
-    <HoverCard
-      anchor={ownRow}
-      content={<SessionHoverContent node={node} now={now} t={t} />}
-      disabled={menuOpen || drag?.active === true}
-      copyText={row.blank ? undefined : row.title}
-      copyLabel={t('copy')}
-      copiedLabel={t('hover.copied')}
-    />
+    <>
+      <HoverCard
+        anchor={ownRow}
+        content={<SessionHoverContent node={node} now={now} emergencyMetadata={emergencyMetadata} t={t} />}
+        disabled={menuOpen || drag?.active === true || focusedTeamPanel !== null}
+        copyText={row.blank ? undefined : row.title}
+        copyLabel={t('copy')}
+        copiedLabel={t('hover.copied')}
+      />
+      {focusedTeamPanel !== null && teamParticipants !== undefined && (
+        <div
+          className={css.focusCard}
+          style={focusedTeamPanel}
+          role="tooltip"
+          data-eh-session-members-focus={node.id}
+        >
+          <EmergencyMembers sessionId={node.id} participants={teamParticipants} />
+        </div>
+      )}
+    </>
   )
 }
