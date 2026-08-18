@@ -604,9 +604,11 @@ export class Session {
   append<T extends SessionEventType>(
     type: T,
     data: SessionEventMap[T],
-    ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent] : []
+    ...opts: T extends SurfaceEventType
+      ? [opts: SurfaceIntent & { ignorable?: boolean }]
+      : [opts?: { ignorable?: boolean }]
   ): SessionEvent<T> {
-    const surfaceOpts: SurfaceIntent | undefined = opts[0]
+    const surfaceOpts = opts[0] as (Partial<SurfaceIntent> & { ignorable?: boolean }) | undefined
     const surfaceMetadata = {
       ...surfaceOpts?.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: surfaceOpts.sourceEventSeqs },
       ...surfaceOpts?.surfaceOp === undefined ? {} : { surfaceOp: surfaceOpts.surfaceOp },
@@ -629,6 +631,7 @@ export class Session {
       seq: this.log.length,
       time: Date.now(),
       data: dataSnapshot,
+      ...surfaceOpts?.ignorable === true ? { ignorable: true } : {},
       ...(surfaceMetadataSnapshot as { surfaceOp?: unknown; sourceEventSeqs?: unknown }),
     } as unknown as SessionEvent<T>)
     this.surfaceManager.validateNext(event as SessionEvent)

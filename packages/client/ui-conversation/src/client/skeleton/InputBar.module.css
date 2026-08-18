@@ -1,3 +1,13 @@
+/* Few-glyph font: maps U+FFF9–U+FFFC to blank 7/10/13/15em-advance glyphs
+   (every other codepoint falls through to the next family). Loaded first in
+   the composer
+   font stack, it gives the placeholder a real cell width INSIDE the textarea,
+   so the backdrop chip (same char, same stack) matches it by construction —
+   the two layers cannot drift and the chip gets a usable label cell. */
+@font-face {
+  font-family: 'DshChipCell';
+  src: url('data:font/ttf;base64,AAEAAAAKAIAAAwAgT1MvMkT8SmIAAAEoAAAAYGNtYXAADwBbAAABnAAAADxnbHlmAAAAAAAAAeQAAAABaGVhZCxLqEIAAACsAAAANmhoZWEDIjnWAAAA5AAAACRobXR4sbwAAAAAAYgAAAAUbG9jYQAAAAAAAAHYAAAADG1heHAABgACAAABCAAAACBuYW1lvljk2gAAAegAAABscG9zdCyMmxsAAAJUAAAAVwABAAAAAQAAg1dCvV8PPPUAAwPoAAAAAOaLfcUAAAAA5qnpnQAAAAAAAAAAAAAAAwACAAAAAAAAAAEAAAMg/zgAADqYAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAFAAEAAAAFAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAwjKAZAABQAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAPz8/PwAA//z//AMg/zgAAAMgAMgAAAAAAAAAAAAAAAAAAAAgAAAB9AAAOpgAABtYAAAnEAAAMsgAAAAAAAIAAAADAAAAFAADAAEAAAAUAAQAKAAAAAQABAABAAD//P//AAD/+f//AAAAAQAEAAAAAgADAAQAAQAAAAAAAAAAAAAAAAAAAAAAAAAEADYAAQAAAAAAAQALAAAAAQAAAAAAAgAHAAsAAwABBAkAAQAWABIAAwABBAkAAgAOAChEc2hDaGlwQ2VsbFJlZ3VsYXIARABzAGgAQwBoAGkAcABDAGUAbABsAFIAZQBnAHUAbABhAHIAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAABAgEDAQQBBQZvYmpyZXALb2JqcmVwLmZmZjkLb2JqcmVwLmZmZmELb2JqcmVwLmZmZmIA') format('truetype');
+}
 
 /* Floating capsule input (figma Input_Bottom 75:8208): card floats above the
    viewport bottom inside the centered message column; textarea on top, action
@@ -211,7 +221,10 @@
   /* figma .InputText 34:10434: pl 16 / pr 12 / pt 4. Backdrop MUST share these
      metrics or the highlight ranges drift off the glyphs. */
   padding: 4px 12px 0 16px;
-  font-family: var(--dsw-font-family);
+  /* DshChipCell first: ONLY U+FFFC resolves there (width-classed blank cells — the chip
+     slot); everything else falls through to the app stack. All three layers
+     share the stack, so placeholder advances agree by construction. */
+  font-family: 'DshChipCell', var(--dsw-font-family);
   font-size: inherit;
   /* Three consumers, not two: the mirror sizes the stack, the layers must break
      lines identically, and the caret reveal parses this value to step one line
@@ -428,6 +441,18 @@
   position: relative;
 }
 
+/* Reference chip: rendered in the backdrop at the placeholder offset. Hard
+   alignment constraint: the chip's advance must equal the textarea's U+FFFC
+   advance EXACTLY or every glyph after it drifts (caret/selection follow the
+   textarea character stream). The ::before renders the same U+FFFC through
+   the same font stack (DshChipCell 15em cell), so both layers agree by
+   construction — no measured widths. The label overlays the cell, left-aligned
+   so the type icon and name survive any residual clipping; the full name
+   rides the title tooltip. */
+.chip {
+  position: relative;
+}
+
 .textRefTriggerGlyph {
   color: transparent;
 }
@@ -439,31 +464,26 @@
   transform: translate(-50%, -50%);
 }
 
-/* Structured references use the same inline-backdrop technique as /skill:
-   their complete display text remains in the textarea, so wrapping and caret
-   geometry come from the browser's native glyph metrics. The leading marker
-   reserves the icon's advance while the backdrop paints the domain glyph. */
-.chip {
-  position: relative;
-  color: var(--dsw-alias-state-business-primary);
-  background: transparent;
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
-}
-
-.chipTrigger {
-  position: relative;
-}
-
-.chipTriggerGlyph {
+.chipCell {
   color: transparent;
 }
 
-.chipIcon {
+.chipLabel {
+  /* Compensated-scale layout: overflow clipping happens BEFORE transform,
+     so the box is laid out at 1/0.72 of the cell and scaled back down — the
+     clip edge then lands on the visual cell edge, not mid-glyph. */
   position: absolute;
+  left: 5px;
   top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  width: calc(100% / 0.72 - 10px);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  white-space: nowrap;
+  transform: translateY(-50%) scale(0.72);
+  transform-origin: left center;
 }
 
 .chipInvalid {

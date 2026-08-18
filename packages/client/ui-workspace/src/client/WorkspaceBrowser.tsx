@@ -19,6 +19,8 @@ import type {
   SessionId, SessionListState, SessionSearchResultItem, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import type { WorkspaceBrowserProps } from './contract/slots.ts'
+import { useEmergencySessionRows } from './emergency-session-rows.ts'
+import type { EmergencySessionRowMetadata, EmergencySessionRowsState } from './emergency-session-rows.ts'
 import type { SessionNode, SessionOrderBy } from './tree.ts'
 import { deriveFlat, deriveGroups, deriveSearchResults, UNGROUPED_KEY } from './tree.ts'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './rows/Rows.tsx'
@@ -37,6 +39,7 @@ const SEARCH_DEBOUNCE_MS = 250
 const SEARCH_QUERY_MAX_CODE_UNITS = 500
 /** Session rows visible per Workspace before the local overflow control. */
 const COLLAPSED_SESSION_LIMIT = 5
+const STANDARD_SESSION_METADATA = { kind: 'standard' } as const satisfies EmergencySessionRowMetadata
 
 /** Keep controlled input and RPC payload inside the session.search wire contract. */
 function sanitizeSearchQuery(value: string): string {
@@ -245,6 +248,7 @@ type SessionTreeProps = Pick<
   onSessionArchive: (sessionId: SessionNode['id']) => void
   /** Session order behavior: fixed after edits, or additionally promoted by user activity. */
   orderBy: SessionOrderBy
+  emergencySessions: EmergencySessionRowsState
 }
 
 /** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
@@ -254,6 +258,7 @@ function SessionTree({
   insertWorkspaceBefore, insertSessionBefore, orderBy,
   groupExpansion, setGroupExpanded,
   sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, home, t,
+  emergencySessions,
 }: SessionTreeProps) {
   const list = useSessions(s => s)
   const current = list.current
@@ -519,6 +524,9 @@ function SessionTree({
                     onRename={onSessionRename}
                     onFork={forkSession}
                     onArchive={onSessionArchive}
+                    emergencyMetadata={emergencySessions.ready
+                      ? emergencySessions.bySession.get(node.id) ?? STANDARD_SESSION_METADATA
+                      : undefined}
                     drag={dragProps}
                     t={t}
                   />
@@ -549,6 +557,7 @@ function SessionTree({
 function FlatList({
   useSessions, open, forkSession, onSessionRename, onSessionArchive, archivedSessionIds,
   orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t,
+  emergencySessions,
 }: Pick<
   SessionTreeProps,
   | 'useSessions'
@@ -563,6 +572,7 @@ function FlatList({
   | 'syncSessionOrderAccount'
   | 'setSessionOrder'
   | 't'
+  | 'emergencySessions'
 >) {
   const list = useSessions(s => s)
   const baseRows = useMemo(
@@ -635,6 +645,9 @@ function FlatList({
               onRename={onSessionRename}
               onFork={forkSession}
               onArchive={onSessionArchive}
+              emergencyMetadata={emergencySessions.ready
+                ? emergencySessions.bySession.get(node.id) ?? STANDARD_SESSION_METADATA
+                : undefined}
               flat
               drag={{
                 start: () => {
@@ -769,6 +782,7 @@ export function WorkspaceBrowser({
   const workspaces = useWorkspaces(state => state.items)
   const workspacePhase = useWorkspaces(state => state.phase)
   const archivedSessionIds = useWorkspaces(state => state.archivedSessionIds)
+  const emergencySessions = useEmergencySessionRows()
   // Live occupancy of this surface's directory-flow hole (the same source the
   // flow reads): a composition without a picking affordance can add nothing.
   const directoryFlowAvailable = useDirectoryFlow(occupied => occupied)
@@ -1165,6 +1179,7 @@ export function WorkspaceBrowser({
                 sessionUpdatedAtByAccount={sessionUpdatedAtByAccount}
                 syncSessionOrderAccount={actions.syncSessionOrderAccount}
                 setSessionOrder={actions.setSessionOrder}
+                emergencySessions={emergencySessions}
                 t={t}
               />
             )
@@ -1188,6 +1203,7 @@ export function WorkspaceBrowser({
                 insertSessionBefore={insertSessionBefore}
                 orderBy={orderBy}
                 home={home}
+                emergencySessions={emergencySessions}
                 t={t}
                 onRenameRequest={(workspaceId, currentTitle) => {
                   setRenameTarget({ workspaceId, currentTitle })

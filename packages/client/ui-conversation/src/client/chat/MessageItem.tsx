@@ -8,7 +8,9 @@ import type { ReactNode } from 'react'
 import type {
   ModelRetryNode, TurnErrorNode, UserMessageNode,
 } from '@deepseek-ai/dsh-client-runtime/client'
-import { JsonBlock, MessageText, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  JsonBlock, MessageText, ReferenceText, StateDot, projectStructuredReferenceText,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps } from '../contract/slots.ts'
 import { ReferenceIcon } from '../reference/ReferenceIcon.tsx'
 import { CompactionItem } from './CompactionItem.tsx'
@@ -234,7 +236,10 @@ function UserStyleBubble({
       <div className={css.userStack}>
         {renderMessageImages({ images, align: 'end' })}
         {showBubble && <div className={css.bubble}>
-          {projectUserText(text, referenceLabels)}
+          <ReferenceText
+            text={text}
+            renderText={segment => <>{projectUserText(segment, referenceLabels)}</>}
+          />
           {rest.map((block, i) => <JsonBlock key={i} label={t('message.extraBlock')} payload={block} truncatedLabel={truncated} />)}
         </div>}
         {referenceLabels.length > 0 && (
@@ -243,7 +248,7 @@ function UserStyleBubble({
           </div>
         )}
       </div>
-      {actions?.(text)}
+      {actions?.(projectStructuredReferenceText(text))}
     </div>
   )
 }

@@ -61,8 +61,8 @@ export const detectTrigger: DetectTrigger = (draft, caret, guard) => {
   for (let i = caret - 1; i >= 0; i--) {
     const ch = draft.charAt(i)
     if (WHITESPACE.test(ch)) return null
-    if (ch !== '/') continue
-    if (guard.tier === 'claimed') continue
+    if (ch !== '/' && ch !== '@' && ch !== '#') continue
+    if (guard.tier === 'claimed' && ch === '/') continue
     if (!boundaryOk(draft, i, ch)) continue
     return {
       trigger: ch,

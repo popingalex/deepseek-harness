@@ -4,8 +4,10 @@
  * clock. Package-private — the SessionInput shell is the only caller and the
  * sole executor of the returned effects.
  *
- * Draft truth: the draft string holds each reference's complete inline display
- * text; the occurrence table carries identity, range, and the owner's cached projections. Every
+ * Draft truth: the draft string holds one placeholder char per chip (one of
+ * U+FFF9–U+FFFC — the DshChipCell font maps them to blank 7/10/13/15em cells;
+ * the width class is picked from the chip's label at insert time); the
+ * occurrence table carries identity and the owner's cached projections. Every
  * draft mutation is one transaction — draft edit, occurrence reconciliation,
  * and undo-log push are atomic inside dispatch() — and bumps draftRev, which
  * is what lets span CAS reduce to a revision-equality check: equal rev ⟹
@@ -20,19 +22,31 @@ import type {
   InputState, Occurrence, PasteAttemptState, PasteComponent, SubmitAttempt,
 } from './contract.ts'
 
-/** Legacy fixed-width object replacement character rejected from pasted text. */
+/** The object-replacement character backing every chip occurrence in the draft (widest class). */
 export const PLACEHOLDER = '￼'
 
-const REFERENCE_PLACEHOLDER_RE = /[\uE100-\uE11D\uFFFC]/gu
+/**
+ * Placeholder width classes, narrow → wide (DshChipCell blank-glyph advances:
+ * 7 / 10 / 13 / 15em). One char per chip keeps caret, selection and deletion
+ * semantics identical; the class only chooses how wide the chip's cell is.
+ */
+export const PLACEHOLDER_CLASSES = ['￹', '￺', '￻', '￼'] as const
+
+const PLACEHOLDER_STRIP = /[￹￺￻￼\uE100-\uE11D]/g
 
 /**
- * Build the inline draft text whose leading marker is decorated as the
- * reference icon in the backdrop.
- * @param reference - reference insertion with its cached display projection.
- * @returns display text with one marker glyph followed by the complete label.
+ * Pick the placeholder whose cell fits the label with the least slack.
+ * Weights approximate the label's rendered width at the composer's 0.72
+ * label scale on a 16px font: CJK ≈ 0.63em, emoji ≈ 0.8em, latin ≈ 0.35em.
  */
-export function referenceDraftText(reference: Pick<ReferenceInsert, 'label'>): string {
-  return `@${reference.label}`
+export function placeholderForLabel(label: string): string {
+  let em = 0.6
+  for (const ch of label) {
+    const cp = ch.codePointAt(0) ?? 0
+    em += cp > 0xffff ? 0.8 : cp > 0x2000 ? 0.63 : ch === ' ' ? 0.15 : 0.35
+  }
+  return em <= 7 ? PLACEHOLDER_CLASSES[0] : em <= 10 ? PLACEHOLDER_CLASSES[1] : em <= 13 ? PLACEHOLDER_CLASSES[2] : PLACEHOLDER_CLASSES[3]
+}
 }
 
 /** The machine never writes the queue; the wiring layer overlays the queue store's projection. */
@@ -92,7 +106,7 @@ export function projectClipboard(state: Pick<InputState, 'draft' | 'occurrences'
   let cursor = 0
   for (const o of occurrences) {
     out += draft.slice(cursor, o.offset) + o.clipboardText
-    cursor = o.offset + o.length
+    cursor = o.offset + 1
   }
   return out + draft.slice(cursor)
 }
@@ -236,14 +250,13 @@ export class InputMachine {
   }
 
   /** Mint one occurrence at a draft offset. */
-  private mint(reference: ReferenceInsert, offset: number, length: number): Occurrence {
+  private mint(reference: ReferenceInsert, offset: number): Occurrence {
     this.occurrenceSeq += 1
     return {
       occurrenceId: this.occurrenceSeq,
       source: reference.source,
       ref: reference.ref,
       offset,
-      length,
       label: reference.label,
       ...reference.appearance === undefined ? {} : { appearance: reference.appearance },
       clipboardText: reference.clipboardText,
@@ -316,8 +329,7 @@ export class InputMachine {
     this.typingRun = undefined
     const tail = this.draft.slice(span.end)
     const gap = tail.length === 0 || tail[0] !== ' ' ? ' ' : ''
-    const displayText = referenceDraftText(reference)
-    const inserted = displayText + gap
+    const inserted = placeholderForLabel(reference.label) + gap
     this.reconcile({ start: span.start, end: span.end, insertedLength: inserted.length })
     this.withMinted([this.mint(reference, span.start, displayText.length)])
     this.adopt(this.draft.slice(0, span.start) + inserted + tail)
@@ -417,7 +429,7 @@ export class InputMachine {
   ): InputEffect[] {
     const { start, end } = selection
     if (start < 0 || start > end || end > this.draft.length) return []
-    const text = rawText.replace(REFERENCE_PLACEHOLDER_RE, '')
+    const text = rawText.replace(PLACEHOLDER_STRIP, '')
     this.pushTxn(selection)
     this.typingRun = undefined
     // Componentize: replace each matched token range (paste-text coordinates,
@@ -428,9 +440,8 @@ export class InputMachine {
     let cursor = 0
     for (const c of sorted) {
       inserted += text.slice(cursor, c.start)
-      const displayText = referenceDraftText(c.reference)
-      minted.push(this.mint(c.reference, start + inserted.length, displayText.length))
-      inserted += displayText
+      minted.push(this.mint(c.reference, start + inserted.length))
+      inserted += placeholderForLabel(c.reference.label)
       cursor = c.end
     }
     inserted += text.slice(cursor)

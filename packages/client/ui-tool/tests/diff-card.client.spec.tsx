@@ -336,6 +336,7 @@ describe('DetailsPanel diff Output section', () => {
         inputActions={{
           setDraft: () => {},
           addImages: () => true,
+          appendReference: () => true,
           removeImage: () => {},
           pruneImages: () => {},
           submit: () => {},

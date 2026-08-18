@@ -4,6 +4,7 @@
  * highlight, the claim hint as ghost text). Zero React — the skeleton renders
  * the instructions; tests drive this directly.
  */
+import type { TriggerChar } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { InputState } from './contract.ts'
 
 /** The claim-token highlight range (always draft-leading while the watch holds). */
@@ -16,13 +17,11 @@ export interface TokenRange {
 export interface ChipRender {
   /** Stable render key (same-labeled chips stay independent). */
   readonly occurrenceId: number
-  /** Display-text offset in the draft. */
+  /** Placeholder offset in the draft (the chip occupies [offset, offset+1)). */
   readonly offset: number
-  /** Display-text length in the draft. */
-  readonly length: number
-  /** Exact inline text whose native glyph metrics determine layout. */
-  readonly text: string
   readonly label: string
+  /** Owning source name for integration-level projection selectors. */
+  readonly source: string
   /** Optional domain glyph beside the label. */
   readonly appearance?: 'session' | 'file' | 'folder'
   /** Owner-resolution failure styling bit. */
@@ -39,7 +38,7 @@ export interface ChipRender {
 export interface TextRefRange {
   readonly start: number
   readonly end: number
-  readonly trigger: '/' | '@'
+  readonly trigger: TriggerChar
   /** Optional icon domain for syntax-recognizable plain references. */
   readonly appearance?: 'folder'
 }
@@ -70,7 +69,7 @@ const FOLDER_REF_RE = /(^|\s)(@(?:"[^"\n]*\/|[^\s"]+\/))/g
  * @returns matched ranges in draft order.
  */
 export function scanTextRefs(
-  draft: string, lexicon: ReadonlyMap<'/' | '@', readonly string[]>,
+  draft: string, lexicon: ReadonlyMap<TriggerChar, readonly string[]>,
 ): TextRefRange[] {
   if (draft === '') return []
   const out: TextRefRange[] = []
@@ -78,7 +77,7 @@ export function scanTextRefs(
     TEXT_REF_RE.lastIndex = 0
     let m: RegExpExecArray | null
     while ((m = TEXT_REF_RE.exec(draft)) !== null) {
-      const trigger = m[2] as '/' | '@'
+      const trigger = m[2] as TriggerChar
       const name = m[3] ?? ''
       if (lexicon.get(trigger)?.includes(name)) {
         const start = m.index + (m[1]?.length ?? 0)
@@ -100,7 +99,7 @@ export function scanTextRefs(
 }
 
 /** The empty lexicon (default: zero text-ref decorations, old call sites unchanged). */
-const EMPTY_LEXICON: ReadonlyMap<'/' | '@', readonly string[]> = new Map()
+const EMPTY_LEXICON: ReadonlyMap<TriggerChar, readonly string[]> = new Map()
 
 /**
  * Derive the mirror-layer decorations from the input state.
@@ -109,7 +108,7 @@ const EMPTY_LEXICON: ReadonlyMap<'/' | '@', readonly string[]> = new Map()
  * @returns token range, chip instructions, text-ref ranges, and the ghost hint.
  */
 export function deriveDecorations(
-  state: InputState, lexicon: ReadonlyMap<'/' | '@', readonly string[]> = EMPTY_LEXICON,
+  state: InputState, lexicon: ReadonlyMap<TriggerChar, readonly string[]> = EMPTY_LEXICON,
 ): DraftDecorations {
   const { draft, claim, phase, occurrences } = state
   const claimActive = (phase === 'claimed' || phase === 'submitting')
@@ -118,9 +117,8 @@ export function deriveDecorations(
   const chips = occurrences.map(o => ({
     occurrenceId: o.occurrenceId,
     offset: o.offset,
-    length: o.length,
-    text: draft.slice(o.offset, o.offset + o.length),
     label: o.label,
+    source: o.source,
     ...o.appearance === undefined ? {} : { appearance: o.appearance },
     invalid: o.invalid === true,
   }))

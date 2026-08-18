@@ -1245,17 +1245,17 @@ describe('decorations', () => {
         source: 'reference', ref: 'w1', label: '会话一', appearance: 'session', clipboardText: '@w1',
       }, { start: 0, end: 3, draftRev: shell.snapshot.draftRev })
     })
-    expect(shell.snapshot.draft).toBe('@会话一 ')
+    expect(shell.snapshot.draft).toBe(`${placeholderForLabel('会话一')} `)
     // The inserted char equals the reference's own leading trigger, so the two
     // drafts alone cannot say whether it landed before or after that trigger.
     textarea.setSelectionRange(0, 0)
     act(() => {
       beforeInput(textarea)
-      fireEvent.change(textarea, { target: { value: '@@会话一 ' } })
+      fireEvent.change(textarea, { target: { value: `@${placeholderForLabel('会话一')} ` } })
     })
-    expect(shell.snapshot.draft).toBe('@@会话一 ')
+    expect(shell.snapshot.draft).toBe(`@${placeholderForLabel('会话一')} `)
     expect(shell.snapshot.occurrences).toHaveLength(1)
-    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 1, length: 4 })
+    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 1 })
   })
 
   it('a selection-replacing delete before a reference keeps it structured', () => {
@@ -1266,15 +1266,15 @@ describe('decorations', () => {
         source: 'reference', ref: 'w1', label: '会话一', appearance: 'session', clipboardText: '@w1',
       }, { start: 1, end: 4, draftRev: shell.snapshot.draftRev })
     })
-    expect(shell.snapshot.draft).toBe('@@会话一 ')
+    expect(shell.snapshot.draft).toBe(`@${placeholderForLabel('会话一')} `)
     textarea.setSelectionRange(0, 1)
     act(() => {
       beforeInput(textarea, 'deleteContentBackward')
-      fireEvent.change(textarea, { target: { value: '@会话一 ' } })
+      fireEvent.change(textarea, { target: { value: `${placeholderForLabel('会话一')} ` } })
     })
-    expect(shell.snapshot.draft).toBe('@会话一 ')
+    expect(shell.snapshot.draft).toBe(`${placeholderForLabel('会话一')} `)
     expect(shell.snapshot.occurrences).toHaveLength(1)
-    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0, length: 4 })
+    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0 })
   })
 
   it('a caret Backspace before a reference keeps it structured', () => {
@@ -1285,16 +1285,16 @@ describe('decorations', () => {
         source: 'reference', ref: 'w1', label: '会话一', appearance: 'session', clipboardText: '@w1',
       }, { start: 1, end: 4, draftRev: shell.snapshot.draftRev })
     })
-    expect(shell.snapshot.draft).toBe('@@会话一 ')
+    expect(shell.snapshot.draft).toBe(`@${placeholderForLabel('会话一')} `)
     // A caret delete reports the bare caret, never the character it removes.
     textarea.setSelectionRange(1, 1)
     act(() => {
       beforeInput(textarea, 'deleteContentBackward')
-      fireEvent.change(textarea, { target: { value: '@会话一 ' } })
+      fireEvent.change(textarea, { target: { value: `${placeholderForLabel('会话一')} ` } })
     })
-    expect(shell.snapshot.draft).toBe('@会话一 ')
+    expect(shell.snapshot.draft).toBe(`${placeholderForLabel('会话一')} `)
     expect(shell.snapshot.occurrences).toHaveLength(1)
-    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0, length: 4 })
+    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0 })
   })
 
   it('a caret Delete before a reference keeps it structured', () => {
@@ -1308,11 +1308,11 @@ describe('decorations', () => {
     textarea.setSelectionRange(0, 0)
     act(() => {
       beforeInput(textarea, 'deleteContentForward')
-      fireEvent.change(textarea, { target: { value: '@会话一 ' } })
+      fireEvent.change(textarea, { target: { value: `${placeholderForLabel('会话一')} ` } })
     })
-    expect(shell.snapshot.draft).toBe('@会话一 ')
+    expect(shell.snapshot.draft).toBe(`${placeholderForLabel('会话一')} `)
     expect(shell.snapshot.occurrences).toHaveLength(1)
-    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0, length: 4 })
+    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0 })
   })
 
   it('a caret word delete before a reference keeps it structured', () => {
@@ -1323,17 +1323,17 @@ describe('decorations', () => {
         source: 'reference', ref: 'w1', label: '会话一', appearance: 'session', clipboardText: '@w1',
       }, { start: 5, end: 8, draftRev: shell.snapshot.draftRev })
     })
-    expect(shell.snapshot.draft).toBe('word @会话一 ')
+    expect(shell.snapshot.draft).toBe(`word ${placeholderForLabel('会话一')} `)
     // One caret gesture can remove more than one character; the deleted span
     // is whatever the draft lost, never a fixed step.
     textarea.setSelectionRange(5, 5)
     act(() => {
       beforeInput(textarea, 'deleteWordBackward')
-      fireEvent.change(textarea, { target: { value: '@会话一 ' } })
+      fireEvent.change(textarea, { target: { value: `${placeholderForLabel('会话一')} ` } })
     })
-    expect(shell.snapshot.draft).toBe('@会话一 ')
+    expect(shell.snapshot.draft).toBe(`${placeholderForLabel('会话一')} `)
     expect(shell.snapshot.occurrences).toHaveLength(1)
-    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0, length: 4 })
+    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 0 })
   })
 
   it('copy and cut expand a partial reference selection to its structured range', () => {

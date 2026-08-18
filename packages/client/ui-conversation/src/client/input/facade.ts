@@ -10,7 +10,7 @@ import type { ClientContext, ObservableSnapshot, SnapshotStore } from '@deepseek
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type {
   ArbitrateKey, ArbitrateOutcome, CommandClaim, ConsumeTokenRequest, PickOutcome,
-  ReferenceInsert, InputTriggerController, SubmitImageAttachment, SubmitOutcome, TokenSpan,
+  ReferenceInsert, InputTriggerController, SubmitImageAttachment, SubmitOutcome, TokenSpan, TriggerChar,
 } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type {
   DraftAttachmentId, EditRange, EditSelection, InputActions, InputEffect, InputNotice, InputState,
@@ -74,7 +74,7 @@ function guardOf(phase: InputState['phase']): 'plain' | 'claimed' | 'frozen' {
 const EMPTY_QUEUE: readonly QueuedMessage[] = []
 
 /** No-pipeline lexicon: zero text-ref decorations. */
-const EMPTY_LEXICON: ReadonlyMap<'/' | '@', readonly string[]> = new Map()
+const EMPTY_LEXICON: ReadonlyMap<TriggerChar, readonly string[]> = new Map()
 
 /**
  * The per-session input facade: scoped-event application verbs +
@@ -89,6 +89,11 @@ export class SessionInputShell implements SessionInput {
   readonly actions: InputActions = {
     setDraft: (text) => { this.setDraft(text) },
     addImages: ids => this.addImages(ids),
+    appendReference: reference => this.insertReference(reference, {
+      start: this.snapshot.draft.length,
+      end: this.snapshot.draft.length,
+      draftRev: this.snapshot.draftRev,
+    }),
     removeImage: (id) => { this.removeImage(id) },
     pruneImages: (ids) => { this.pruneImages(ids) },
     submit: () => { this.submit('queue') },
@@ -301,7 +306,7 @@ export class SessionInputShell implements SessionInput {
    * identity per shell; without a pipeline the snapshot is the empty Map and
    * subscribers never fire.
    */
-  readonly lexicon: ObservableSnapshot<ReadonlyMap<'/' | '@', readonly string[]>> = {
+  readonly lexicon: ObservableSnapshot<ReadonlyMap<TriggerChar, readonly string[]>> = {
     getSnapshot: () => this.deps.inputTriggers?.()?.lexicon.getSnapshot() ?? EMPTY_LEXICON,
     subscribe: fn => this.deps.inputTriggers?.()?.lexicon.subscribe(fn) ?? (() => {}),
   }

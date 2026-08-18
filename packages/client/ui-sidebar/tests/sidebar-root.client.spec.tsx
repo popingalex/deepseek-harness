@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import type {
-  SidebarFooterActionOwnerProps, SidebarRootComponentProps, SidebarSectionOwnerProps,
+  SidebarCreateActionOwnerProps, SidebarFooterActionOwnerProps, SidebarRootComponentProps, SidebarSectionOwnerProps,
   SidebarSettingsOwnerProps,
 } from '../src/client/contract/slots.ts'
 import { SidebarRoot } from '../src/client/SidebarRoot.tsx'
@@ -27,6 +27,7 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
   const startSession = vi.fn()
   const toggleSidebar = vi.fn()
   let regionOwner: SidebarSectionOwnerProps | undefined
+  let createActionOwner: SidebarCreateActionOwnerProps | undefined
   let settingsOwner: SidebarSettingsOwnerProps | undefined
   let footerActionOwner: SidebarFooterActionOwnerProps | undefined
   const brandMark = <span data-testid="custom-brand-mark">M</span>
@@ -39,7 +40,7 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
       startSession={startSession} toggleSidebar={toggleSidebar} t={t}
       renderSlot={((
         key: string,
-        owner: SidebarFooterActionOwnerProps | SidebarSectionOwnerProps | SidebarSettingsOwnerProps,
+        owner: SidebarCreateActionOwnerProps | SidebarFooterActionOwnerProps | SidebarSectionOwnerProps | SidebarSettingsOwnerProps,
       ) => {
         if (key === 'sidebar.brand.mark') return brandMark
         if (key === 'sidebar.brand.name') return brandName
@@ -50,6 +51,10 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
         if (key === 'sidebar.footer.action') {
           footerActionOwner = owner
           return <div data-testid="footer-action-seat" data-wide={owner.wide} />
+        }
+        if (key === 'sidebar.create.action') {
+          createActionOwner = owner as SidebarCreateActionOwnerProps
+          return <div data-testid="create-action-seat" data-wide={owner.wide} />
         }
         regionOwner = owner as SidebarSectionOwnerProps
         return <div data-testid="region" data-wide={owner.wide} />
@@ -63,6 +68,10 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
     regionOwner: () => {
       if (regionOwner === undefined) throw new Error('region owner not rendered')
       return regionOwner
+    },
+    createActionOwner: () => {
+      if (createActionOwner === undefined) throw new Error('create action owner not rendered')
+      return createActionOwner
     },
     settingsOwner: () => {
       if (settingsOwner === undefined) throw new Error('settings owner not rendered')
@@ -108,11 +117,19 @@ describe('SidebarRoot shell', () => {
     expect(container.querySelector('svg')).not.toBeNull()
   })
 
+  it('keeps native and contributed create actions in one row', () => {
+    mountShell()
+    const actions = screen.getByTestId('sidebar-create-actions')
+    expect(actions.contains(screen.getAllByRole('button', { name: 'New session' })[1] ?? null)).toBe(true)
+    expect(actions.contains(screen.getByTestId('create-action-seat'))).toBe(true)
+  })
+
   it('hands the region its wide flag and clamps expandSidebar to the collapsed state', () => {
     const b = mountShell()
     expect(b.regionOwner().wide).toBe(true)
     // The settings seat rides the same wide flag (ui-settings renders the row).
     expect(b.settingsOwner().wide).toBe(true)
+    expect(b.createActionOwner().wide).toBe(true)
     expect(b.footerActionOwner().wide).toBe(true)
     // Expanded: the request is a no-op (no accidental collapse).
     b.regionOwner().expandSidebar()
@@ -128,6 +145,7 @@ describe('SidebarRoot shell', () => {
     vi.advanceTimersByTime(200)
     b.rerender({})
     expect(b.regionOwner().wide).toBe(false)
+    expect(b.createActionOwner().wide).toBe(false)
     expect(b.footerActionOwner().wide).toBe(false)
     expect(screen.getByTestId('region')).toBeTruthy()
     b.regionOwner().expandSidebar()

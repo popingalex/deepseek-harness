@@ -75,6 +75,8 @@ export interface InputActions {
   setDraft(text: string): void
   /** Append ordered browser-owned image ids; busy admission phases refuse. */
   addImages(ids: readonly DraftAttachmentId[]): boolean
+  /** Append one structured reference occurrence at the end of the current draft. */
+  appendReference(reference: ReferenceInsert): boolean
   /** Remove one browser-owned image id; busy admission phases refuse. */
   removeImage(id: DraftAttachmentId): void
   /** Drop ids whose browser-owned objects no longer exist. */
@@ -162,10 +164,8 @@ export interface Occurrence {
   readonly source: string
   /** Owner-scoped reference id. */
   readonly ref: string
-  /** Display-text offset in the draft. */
+  /** Placeholder offset in the draft; the occurrence occupies exactly [offset, offset+1). */
   readonly offset: number
-  /** Display-text length; the occurrence occupies exactly [offset, offset+length). */
-  readonly length: number
   /** Inline display label (insert-time cache). */
   readonly label: string
   /** Optional domain glyph (insert-time cache). */

@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-纯 React 原子组件（零 cordis）：StateDot、DisclosureRow、ic_ds_* 图标、Button/Pill/Menu/Modal/Input、Toast 短时横幅、OnboardingSurface 首次使用接管层（portal 到 body 的遮罩加不透明展示层，在且仅在自身生命周期内保持 `#root` 为 `inert`）、markdown 家族（MessageText/MarkdownText/JsonBlock）、只读 JsonTree 检查器、`useAnchoredMaxHeight` 钩子（把底部锚定的浮层高度收敛到锚点上方的视口空间，并在 resize、scroll 与调用方提供的依赖变化时重新测量）、`useAnchoredPosition` 钩子（让固定定位的浮动面板跟住锚点：测量、偏移、按视口边距钳制，并在捕获阶段滚动、窗口缩放与面板自身尺寸变化时重新定位）、TerminalBlock、DiffBlock、ReadBlock、SearchBlock，以及 WebBlock。
+纯 React 原子组件（零 cordis）：StateDot、DisclosureRow、ic_ds_* 图标、Button/Pill/Menu/Modal/Input、ReferenceChip/ReferenceText、Toast 短时横幅、OnboardingSurface 首次使用接管层（portal 到 body 的遮罩加不透明展示层，在且仅在自身生命周期内保持 `#root` 为 `inert`）、markdown 家族（MessageText/MarkdownText/JsonBlock）、只读 JsonTree 检查器、`useAnchoredMaxHeight` 钩子（把底部锚定的浮层高度收敛到锚点上方的视口空间，并在 resize、scroll 与调用方提供的依赖变化时重新测量）、`useAnchoredPosition` 钩子（让固定定位的浮动面板跟住锚点：测量、偏移、按视口边距钳制，并在捕获阶段滚动、窗口缩放与面板自身尺寸变化时重新定位）、TerminalBlock、DiffBlock、ReadBlock、SearchBlock，以及 WebBlock。
 
 ## 悬浮卡片
 
@@ -13,6 +13,8 @@
 `Toast` 是顶部的短时横幅：滑入后满不透明度停留三秒，再用一秒淡出，随后调用 `onDone` 由持有方卸载。它渲染 `role="alert"`，带可选的前置图标插槽，文案是必填 prop（零 cordis，由持有方本地化）。它经 body portal 渲染且 `pointer-events: none`，距视口顶部 120px，水平中心跟随可选的 `anchor` 元素（窗口尺寸变化时重测）——composer 传入自己的卡片，横幅因此在聊天列而非整个窗口上居中——不传则回退到视口居中。重复展示同一条消息需要重新挂载，持有方用每次展示递增的序号作为 key，让相同文案重新走完停留与淡出，而不是静默复用已淡出的横幅。`prefers-reduced-motion: reduce` 下去掉滑入，只保留延迟淡出。它的层级高于 ui-attachment 的图片灯箱，预览打开时报出的失败仍然可读。
 
 ## Markdown 渲染
+
+结构化引用 helper 会把 `EH_REF_V1` 与 legacy `EH_LOCATION_V1` wire 形态解析成文本／引用 segment。`ReferenceChip` 与 `ReferenceText` 生成不含存储 id 的显示与 clipboard 标签；位置标签使用可选名称、六位小数经纬度与可选格式化时间。malformed token 保持原始文本。
 
 `MarkdownText` 通过 React 元素渲染来自不受信任 assistant 输出的 GFM 与 `$…$`、`$$…$$`、`\(…\)` 和 `\[…\]` TeX 公式，公式由 KaTeX 排版并禁用受信任命令；块级同一行 `$$…$$` 是显示公式并支持 `\tag{}`。一个小范围的 micromark 扩展允许由星号标记、以标点结尾的粗体在紧邻的 CJK 文本前闭合，以适应 CJK 文本通常省略 CommonMark 所要求空格的写法；单星号强调、紧邻非 CJK 文本的情况、转义、代码与数学公式仍沿用上游解析行为。它会省略原始 HTML，使相对链接及非 HTTP(S)/mailto 链接失效，以安全的外部链接属性打开 HTTP(S) 链接，并在不发送 referrer 的情况下渲染采用绝对 HTTP(S) URL 的图片；相对路径、绝对本地路径、`file:` URL 与不受支持的 scheme 会保留其 alt 文本。完整内容为绝对 HTTP(S) URL 的行内代码会保留代码样式，并获得同样安全的外部链接；命令、非完整 URL、其他 scheme 与围栏代码仍不会成为链接。可选的 `fileMentions` 解析器让持有该组件的视图为命名真实文件的行内代码添加可点击入口：token 保留代码样式，并获得一个连接到解析所得 opener 的按钮，按钮带有解析器提供的无障碍标签和以完整路径为值的 `title`。渲染器绝不猜测哪些内容像路径：未解析的 token 保持不可交互；文件提及仅应用于已定稿的渲染（流式缓存不得固化可能过期的 handler）；锚点内的 token 也保持不可交互，因为按钮不能嵌套其中。回复流式输出期间，`MarkdownText` 增量解析：除末尾两个块外全部冻结为缓存的 React 元素，每个分片只重新解析其后的源文本尾部，因此每分片的工作量跟随尾部而非整个回复（[机制与 DOM 一致性约定](../../../.agents/notes/implemented/architecture/2026-08-06-web-markdown-incremental-ast-renderer.zh.md)）。表格按列数决定尺寸（对齐 deepsuite chat）：不足四列——或位于 blockquote 内——的表格填满所在列，单元格文本换行收缩至最小可读列宽；四列及以上的表格保持自然宽度、在包裹层内横向滚动，并携带稳定的 `md-table-wide` 类，供宿主布局把包裹层加宽到所在列之外（`dsh-client-ui-conversation` 中聊天转录区的容器查询突破样式）；宽表的横向滚动条在悬停或键盘聚焦（包裹层带 `tabindex="0"`）时才出现、不再常驻（[决策记录](../../../.agents/notes/implemented/feature/2026-08-19-web-markdown-wide-table-view.zh.md)）。`MessageText` 仍是用户创作内容使用的字面文本原语。`extractMarkdownPlainText` 会移除 Markdown 呈现标记以用于紧凑标签，同时将原始 HTML 保留为字面文本。元素间距、响应式图片、表格、链接与行内代码使用与 deepsuite `@deepseek/md` 相同的 `--dsw-alias-markdown-*` / `--dsw-font-markdown-*` token。围栏代码块通过 `CodeBlock` 渲染（语言横幅、复制控件，以及对已注册语法使用 shiki）。
 
