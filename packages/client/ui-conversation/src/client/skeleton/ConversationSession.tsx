@@ -137,7 +137,7 @@ export function ConversationSessionHeader({
  */
 export function ConversationSession({
   sessionId, useSession, useInput, inputActions, useStore, actions,
-  renderSlot, views, bindDraftMirror, releaseSessionImages,
+  renderSlot, renderSlotChain, views, bindDraftMirror, releaseSessionImages,
 }: ConversationSessionProps) {
   useSyncExternalStore(views.subscribe, views.version)
   const tabs = views.list()
@@ -162,8 +162,15 @@ export function ConversationSession({
     releaseSessionImages(sessionId)
   }, [releaseSessionImages, sessionId])
 
-  if (blank && composerPhase === 'blank') return null
-  return (
+  if (blank && composerPhase === 'blank') {
+    // Blank sessions normally render nothing, but a plugin renderer may own
+    // them (e.g. EH role sessions whose content lives in the sidecar).
+    return renderSlotChain('conversation.session.renderer', { sessionId }, { fallback: null })
+  }
+  // Middle-column session renderer chain (08-updated §7): a plugin may own
+  // this session's body (e.g. Emergency Team Conversation); otherwise fall
+  // back to the standard conversation view.
+  const native = (
     <div className={css.viewArea}>
       {active !== undefined && renderSlot('conversation.view', {
         inspect,
@@ -171,4 +178,5 @@ export function ConversationSession({
       }, { only: active.id })}
     </div>
   )
+  return renderSlotChain('conversation.session.renderer', { sessionId }, { fallback: native })
 }

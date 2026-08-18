@@ -21,7 +21,7 @@ import type {
 import type { WorkspaceBrowserProps } from './contract/slots.ts'
 import { useEmergencySessionRows } from './emergency-session-rows.ts'
 import type { EmergencySessionRowMetadata, EmergencySessionRowsState } from './emergency-session-rows.ts'
-import type { SessionNode, SessionOrderBy } from './tree.ts'
+import type { SessionNode, SessionOrderBy, SessionVisibilityResolver } from './tree.ts'
 import { deriveFlat, deriveGroups, deriveSearchResults, UNGROUPED_KEY } from './tree.ts'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './rows/Rows.tsx'
 import { FLAT_SESSION_ORDER_KEY } from './stores.ts'
@@ -220,6 +220,7 @@ type SessionTreeProps = Pick<
   WorkspaceBrowserProps,
   'useSessions' | 'startSession' | 'open' | 'forkSession'
   | 'insertWorkspaceBefore' | 'insertSessionBefore' | 't'
+  | 'sessionVisibility' | 'sessionGrouping' | 'sessionListProjection'
 > & {
   /** Host account home for POSIX hover-path abbreviation. */
   home?: string | undefined
@@ -249,6 +250,10 @@ type SessionTreeProps = Pick<
   /** Session order behavior: fixed after edits, or additionally promoted by user activity. */
   orderBy: SessionOrderBy
   emergencySessions: EmergencySessionRowsState
+  /** Optional plugin-provided visibility resolver (Emergency Harness team sessions). */
+  sessionVisibility?: SessionVisibilityResolver | undefined
+  /** Session-row badge child renderer (see WorkspaceBrowserProps). */
+  renderSlot?: WorkspaceBrowserProps['renderSlot'] | undefined
 }
 
 /** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
@@ -258,10 +263,18 @@ function SessionTree({
   insertWorkspaceBefore, insertSessionBefore, orderBy,
   groupExpansion, setGroupExpanded,
   sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, home, t,
+  sessionVisibility, sessionGrouping, sessionListProjection, renderSlot,
   emergencySessions,
 }: SessionTreeProps) {
   const list = useSessions(s => s)
   const current = list.current
+  // U3: reactive projection — subscribe to EH store changes (revision bumps)
+  // so the team-group tree re-derives without polling or resolver re-provision.
+  const [ehProjectionRevision, setEhProjectionRevision] = useState(0)
+  useEffect(() => {
+    const unsub = sessionListProjection?.subscribe?.(() => setEhProjectionRevision(r => r + 1))
+    return unsub
+  }, [sessionListProjection])
   const [expandedSessionGroups, setExpandedSessionGroups] = useState<string[]>([])
   // Transient drag marker state; the selected mode owns the resulting order.
   const [drag, setDrag] = useState<DragState | null>(null)
@@ -331,8 +344,9 @@ function SessionTree({
       ...(sessionOrderByAccount[UNGROUPED_KEY] === undefined
         ? {}
         : { ungroupedOrder: sessionOrderByAccount[UNGROUPED_KEY] }),
-    }),
-    [list, orderedWorkspaces, archivedSessionIds, expandedGroups, sessionOrderByAccount],
+    }, sessionVisibility, sessionGrouping),
+    [list, orderedWorkspaces, archivedSessionIds, expandedGroups, sessionOrderByAccount,
+      sessionVisibility, sessionGrouping, ehProjectionRevision],
   )
   const now = Date.now()
   const commitSessionDrag = (activeDrag: DragState, over: NonNullable<DragState['over']>): void => {
@@ -400,6 +414,7 @@ function SessionTree({
         )}
         {groups.map((group) => {
           const workspaceId = group.workspaceId
+          const team = group.team
           const workspaceMarker = workspaceId !== undefined && workspaceDrag?.over?.id === workspaceId
             ? workspaceDrag.over.half
             : null
@@ -465,6 +480,12 @@ function SessionTree({
                   }
                   setGroupExpanded(group.key, !group.expanded)
                 }}
+                onOpenFeed={team !== undefined ? () => {
+                  // 09 §28: opening the team group also expands it so the
+                  // feed + role children become visible.
+                  setGroupExpanded(group.key, true)
+                  open(team.feedId as SessionId)
+                } : undefined}
                 onCreate={() => {
                   if (group.workspaceId !== undefined) {
                     setGroupExpanded(group.key, true)
@@ -472,18 +493,24 @@ function SessionTree({
                   }
                 }}
                 drag={workspaceDragProps}
-                actions={group.workspaceId === undefined
-                  ? undefined
-                  : {
-                    rename: () => {
-                    /* v8 ignore next -- narrowing guard: the actions object exists only for real-workspace groups. */
-                      if (group.workspaceId !== undefined) onRenameRequest(group.workspaceId, group.label)
-                    },
-                    delete: () => {
-                    /* v8 ignore next -- narrowing guard: the actions object exists only for real-workspace groups. */
-                      if (group.workspaceId !== undefined) onDeleteRequest(group.workspaceId, group.label)
-                    },
-                  }}
+                actions={team !== undefined
+                  ? {
+                    // team group row menu: rename the team session / archive it
+                    rename: () => onSessionRename(team.feedId as SessionId, group.label.replace(/\s·\s\d+$/, '')),
+                    delete: () => onSessionArchive(team.feedId as SessionId),
+                  }
+                  : group.workspaceId === undefined
+                    ? undefined
+                    : {
+                      rename: () => {
+                        /* v8 ignore next -- narrowing guard: the actions object exists only for real-workspace groups. */
+                        if (group.workspaceId !== undefined) onRenameRequest(group.workspaceId, group.label)
+                      },
+                      delete: () => {
+                        /* v8 ignore next -- narrowing guard: the actions object exists only for real-workspace groups. */
+                        if (group.workspaceId !== undefined) onDeleteRequest(group.workspaceId, group.label)
+                      },
+                    }}
               />
               {(expandedSessionGroups.includes(group.key)
                 ? group.sessions
@@ -528,6 +555,7 @@ function SessionTree({
                       ? emergencySessions.bySession.get(node.id) ?? STANDARD_SESSION_METADATA
                       : undefined}
                     drag={dragProps}
+                    renderSlot={renderSlot}
                     t={t}
                   />
                 )
@@ -556,11 +584,10 @@ function SessionTree({
 /** The flat "In one list" body: every session is one draggable top-level row. */
 function FlatList({
   useSessions, open, forkSession, onSessionRename, onSessionArchive, archivedSessionIds,
-  orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t,
+  orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, sessionVisibility, renderSlot, t,
   emergencySessions,
 }: Pick<
-  SessionTreeProps,
-  | 'useSessions'
+  SessionTreeProps,  | 'useSessions'
   | 'open'
   | 'forkSession'
   | 'onSessionRename'
@@ -571,13 +598,16 @@ function FlatList({
   | 'sessionUpdatedAtByAccount'
   | 'syncSessionOrderAccount'
   | 'setSessionOrder'
+  | 'sessionVisibility'
+  | 'sessionGrouping'
+  | 'renderSlot'
   | 't'
   | 'emergencySessions'
 >) {
   const list = useSessions(s => s)
   const baseRows = useMemo(
-    () => deriveFlat(list, archivedSessionIds),
-    [list, archivedSessionIds],
+    () => deriveFlat(list, archivedSessionIds, sessionVisibility),
+    [list, archivedSessionIds, sessionVisibility],
   )
   const sessionIds = useMemo(() => baseRows.map(row => row.id), [baseRows])
   const previousOrderBy = useRef(orderBy)
@@ -649,6 +679,7 @@ function FlatList({
                 ? emergencySessions.bySession.get(node.id) ?? STANDARD_SESSION_METADATA
                 : undefined}
               flat
+              renderSlot={renderSlot}
               drag={{
                 start: () => {
                   dropCommitted.current = false
@@ -776,6 +807,9 @@ export function WorkspaceBrowser({
   useDirectoryFlow,
   useHostDescription,
   renderSlot,
+  sessionVisibility,
+  sessionGrouping,
+  sessionListProjection,
   t,
 }: WorkspaceBrowserProps) {
   const home = useHostDescription(description => description?.home)
@@ -1155,6 +1189,8 @@ export function WorkspaceBrowser({
                 syncSessionOrderAccount={actions.syncSessionOrderAccount}
                 setSessionOrder={actions.setSessionOrder}
                 emergencySessions={emergencySessions}
+                sessionVisibility={sessionVisibility}
+                renderSlot={renderSlot}
                 t={t}
               />
             )
@@ -1179,6 +1215,10 @@ export function WorkspaceBrowser({
                 orderBy={orderBy}
                 home={home}
                 emergencySessions={emergencySessions}
+                sessionVisibility={sessionVisibility}
+                sessionGrouping={sessionGrouping}
+                sessionListProjection={sessionListProjection}
+                renderSlot={renderSlot}
                 t={t}
                 onRenameRequest={(workspaceId, currentTitle) => {
                   setRenameTarget({ workspaceId, currentTitle })

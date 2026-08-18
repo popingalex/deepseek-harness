@@ -74,6 +74,9 @@ export function DetailsPanel({ useSession, useSessions, sessionId, useStore, ren
   const material = useSession(
     s => (callId === undefined ? null : materialFor(s, callId)),
     (a, b) => shallowEqual(a, b))
+  // Additive right-column panels (e.g. Emergency Harness Situation view),
+  // rendered above the tool details; the conversation stays visible.
+  const panels = renderSlot('conversation.details.panel', {}, { fallback: null })
 
   return (
     <div className={css.root}>
@@ -90,6 +93,7 @@ export function DetailsPanel({ useSession, useSessions, sessionId, useStore, ren
           </svg>
         </button>
       </div>
+      {panels}
       <div className={css.body}>
         {selection === null || callId === undefined
           ? <div className={css.empty}>{t('details.empty')}</div>

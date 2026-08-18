@@ -179,6 +179,7 @@ function mount(
           useStore={bindSnapshotSelector(chat)}
           actions={chat.actions}
           renderSlot={renderSlot as never}
+          renderSlotChain={((_k: string, _o: unknown, opts?: { fallback?: unknown }) => opts?.fallback ?? null) as never}
           views={views}
           releaseSessionImages={vi.fn()}
           bindDraftMirror={write => wiring.bindMirror(write)}

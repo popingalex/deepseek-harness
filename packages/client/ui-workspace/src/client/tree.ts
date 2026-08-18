@@ -30,6 +30,8 @@ export interface SessionNode {
   /** Finished running while not selected and not yet opened (the green "done" reminder dot). */
   completed: boolean
   updatedAt: number
+  /** Team member classification (09 §5): 'feed' = public feed row, 'role' = role session row. */
+  teamRole?: { kind: 'feed' } | { kind: 'role'; role: string; displayName: string; avatar: string }
 }
 
 /** Session order selected by the Workspace browser. */
@@ -52,6 +54,15 @@ export interface GroupNode {
   containsCurrent: boolean
   /** Visible session rows (empty while the group is folded). */
   sessions: readonly SessionNode[]
+  /** Team-group metadata (09 §5); absent for ordinary workspace groups. */
+  team?: {
+    status: string
+    avatars: readonly { role: string; icon: string }[]
+    /** The public-feed session id (the team session itself). */
+    feedId: string
+    roles: readonly { role: string; sessionId: string; displayName: string; avatar: string }[]
+    messageCount?: number
+  }
 }
 
 /** One flat search row combining list metadata with an optional content match. */
@@ -114,11 +125,45 @@ function byRecency(a: SessionSummary, b: SessionSummary): number {
  * is visible. Subagent children use their parent header catalog; archived
  * sessions are visible nowhere, while their accounting slots remain so
  * unarchiving restores position.
+ * An optional plugin resolver may override the default verdict
+ * ('visible'/'hidden'); undefined keeps the built-in rule. This lets a
+ * domain (e.g. Emergency Harness) show its blank team sessions and hide
+ * internal runtime sessions.
  */
-function sessionVisible(session: SessionSummary, current: SessionId | undefined, archived: ReadonlySet<SessionId>): boolean {
-  return session.origin !== 'subagent'
-    && !archived.has(session.id)
-    && (!session.blank || session.id === current)
+export type SessionVisibilityResolver = (session: SessionSummary) => 'visible' | 'hidden' | undefined
+
+/** One team-group classification (09 §5). */
+export interface TeamGroupInfo {
+  kind: 'team'
+  title: string
+  status: string
+  messageCount?: number
+  avatars: readonly { role: string; icon: string }[]
+  /** Role children, each a standard DSH session id. */
+  roles: readonly { role: string; sessionId: string; displayName: string; avatar: string }[]
+}
+/** Role-child classification: a session that belongs under a team group. */
+export interface TeamRoleInfo {
+  kind: 'role'
+  teamId: string
+  role: string
+  displayName: string
+  avatar: string
+}
+export type SessionGroupingResolver = (sessionId: string) => TeamGroupInfo | TeamRoleInfo | null
+
+function sessionVisible(
+  session: SessionSummary,
+  current: SessionId | undefined,
+  archived: ReadonlySet<SessionId>,
+  resolver?: SessionVisibilityResolver,
+): boolean {
+  if (session.origin === 'subagent') return false
+  if (archived.has(session.id)) return false
+  const verdict = resolver?.(session)
+  if (verdict === 'visible') return true
+  if (verdict === 'hidden') return false
+  return !session.blank || session.id === current
 }
 
 /**
@@ -176,16 +221,20 @@ function groupByWorkspace(
   workspaces: readonly WorkspaceView[],
   archived: ReadonlySet<SessionId>,
   ungroupedOrder: readonly string[] | undefined,
+  resolver?: SessionVisibilityResolver,
+  exclude?: (session: SessionSummary) => boolean,
 ): Group[] {
   const groups: Group[] = []
   const accounted = new Set<SessionId>()
+  const skip = exclude ?? (() => false)
   for (const workspace of workspaces) {
     const members: SessionSummary[] = []
     for (const id of workspace.sessionIds) {
       const summary = list.byId[id]
       if (summary === undefined) continue // account may lead the list pull; the row appears when the summary lands
       accounted.add(id)
-      if (!sessionVisible(summary, list.current, archived)) continue
+      if (skip(summary)) continue
+      if (!sessionVisible(summary, list.current, archived, resolver)) continue
       members.push(summary)
     }
     groups.push(buildGroup(
@@ -196,7 +245,7 @@ function groupByWorkspace(
   const stray = list.ids
     .map(id => list.byId[id])
     .filter((s): s is SessionSummary =>
-      s !== undefined && !accounted.has(s.id) && sessionVisible(s, list.current, archived))
+      s !== undefined && !accounted.has(s.id) && !skip(s) && sessionVisible(s, list.current, archived, resolver))
   if (stray.length > 0) {
     groups.push(buildGroup(
       UNGROUPED_KEY,
@@ -214,6 +263,7 @@ function groupByWorkspace(
 function sessionNode(
   s: SessionSummary,
   descendants: ReadonlyMap<SessionId, SubagentDescendantSummary>,
+  teamRole?: { kind: 'feed' } | { kind: 'role'; role: string; displayName: string; avatar: string },
 ): SessionNode {
   return {
     id: s.id,
@@ -224,6 +274,7 @@ function sessionNode(
     completed: s.completed === true,
     updatedAt: s.updatedAt,
     ...(s.pendingInteraction === undefined ? {} : { pendingInteraction: s.pendingInteraction }),
+    ...(teamRole === undefined ? {} : { teamRole }),
   }
 }
 
@@ -246,6 +297,8 @@ export function deriveGroups(
   workspaces: readonly WorkspaceView[],
   archivedSessionIds: readonly SessionId[],
   view: TreeView,
+  resolver?: SessionVisibilityResolver,
+  grouping?: SessionGroupingResolver,
 ): GroupNode[] {
   const archived = new Set(archivedSessionIds)
   const expandedGroups = new Set(view.expandedGroups)
@@ -255,7 +308,50 @@ export function deriveGroups(
     : (workspaces.find(w => w.sessionIds.includes(list.current as SessionId))?.workspaceId as string | undefined)
         ?? UNGROUPED_KEY
   const groups: GroupNode[] = []
-  for (const g of groupByWorkspace(list, workspaces, archived, view.ungroupedOrder)) {
+
+  // 09 §5: team groups — a team session becomes a collapsible group row whose
+  // children are each role's standard DSH session. The group row itself IS
+  // the team session (public feed); role sessions are attributed to their
+  // team and excluded from the ordinary workspace/ungrouped lists.
+  const attributedRoleSessions = new Set<SessionId>()
+  if (grouping !== undefined) {
+    for (const id of list.ids) {
+      const info = grouping(id)
+      if (info === null || info.kind !== 'team') continue
+      const teamId = id as SessionId
+      const feed = list.byId[teamId]
+      if (feed === undefined || archived.has(teamId) || feed.origin === 'subagent') continue
+      const members: SessionNode[] = []
+      for (const role of info.roles) {
+        const child = list.byId[role.sessionId as SessionId]
+        if (child === undefined || archived.has(role.sessionId as SessionId)) continue
+        attributedRoleSessions.add(role.sessionId as SessionId)
+        members.push(sessionNode(child, descendants, { kind: 'role', role: role.role, displayName: role.displayName, avatar: role.avatar }))
+      }
+      const expanded = expandedGroups.has(`team:${teamId}`)
+      groups.push({
+        key: `team:${teamId}`,
+        workspaceId: undefined,
+        cwd: undefined,
+        createdAt: undefined,
+        label: info.title,
+        sessionCount: members.length,
+        expanded,
+        containsCurrent: list.current === teamId || info.roles.some(r => r.sessionId === list.current),
+        sessions: expanded ? members : [],
+        team: { status: info.status, avatars: info.avatars, feedId: teamId, roles: info.roles, messageCount: info.messageCount ?? 0 },
+      })
+    }
+  }
+
+  const attributed = (session: SessionSummary): boolean => {
+    const info = grouping?.(session.id as string)
+    return info !== null && info !== undefined && info.kind === 'role'
+  }
+  for (const g of groupByWorkspace(
+    list, workspaces, archived, view.ungroupedOrder, resolver,
+    s => attributedRoleSessions.has(s.id as SessionId) || attributed(s),
+  )) {
     const expanded = expandedGroups.has(g.key)
     groups.push({
       key: g.key,
@@ -284,13 +380,14 @@ export function deriveGroups(
 export function deriveFlat(
   list: SessionListState,
   archivedSessionIds: readonly SessionId[],
+  resolver?: SessionVisibilityResolver,
 ): SessionNode[] {
   const archived = new Set(archivedSessionIds)
   const descendants = indexSubagentDescendants(list.byId)
   const rows: SessionSummary[] = []
   for (const id of list.ids) {
     const s = list.byId[id]
-    if (s === undefined || !sessionVisible(s, list.current, archived)) continue
+    if (s === undefined || !sessionVisible(s, list.current, archived, resolver)) continue
     rows.push(s)
   }
   rows.sort(byRecency)

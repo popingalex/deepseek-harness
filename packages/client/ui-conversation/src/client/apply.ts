@@ -241,6 +241,7 @@ export function apply(ctx: Context): void {
     name: 'conversation.session',
     children: {
       'conversation.view': { kind: 'list', scope: 'session' },
+      'conversation.session.renderer': { kind: 'chain', scope: 'session' },
     },
     store: chatStore,
     inject: (sessionId: SessionId, _actions: BoundActions<typeof chatStore>): ConversationSessionInjected => {
@@ -447,6 +448,7 @@ export function apply(ctx: Context): void {
     locale: NS,
     children: {
       'conversation.details.tool': { kind: 'single', scope: 'session' },
+      'conversation.details.panel': { kind: 'list', scope: 'session' },
     },
     store: chatStore,
     inject: (): DetailsInjected => ({

@@ -441,3 +441,24 @@
     transition: none;
   }
 }
+
+/* ---- Emergency Harness team group (09 §5) ---- */
+.teamLead {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 4px;
+}
+.teamAvatar {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--dsw-alias-bg-layer-2);
+  border: 1px solid var(--dsw-alias-border-l2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  margin-left: -4px;
+}
+.teamAvatar:first-child { margin-left: 0; }

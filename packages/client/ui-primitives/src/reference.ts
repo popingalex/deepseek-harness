@@ -27,6 +27,11 @@ const FALLBACK_LABELS: Readonly<Record<StructuredReferenceKind, string>> = {
   issue: '问题引用',
   fact: '事实引用',
 }
+const KIND_META: Readonly<Record<'asset' | 'issue' | 'fact', { readonly icon: string; readonly label: string }>> = {
+  asset: { icon: '▣', label: '资产' },
+  issue: { icon: '!', label: '问题' },
+  fact: { icon: '◆', label: '事实' },
+}
 const LOCATION_SHAPE_META: Readonly<Record<string, { readonly icon: string; readonly label: string }>> = {
   point: { icon: '📍', label: '定位点' },
   route: { icon: '〰', label: '路径' },
@@ -133,7 +138,9 @@ export function formatStructuredReference(reference: StructuredReference): strin
     const place = [reference.name, coordinates].filter(part => part !== undefined).join(' ')
     return [place ? `${shapeMeta.icon} ${place}` : shapeMeta.label, time].filter(part => part !== undefined).join(' · ')
   }
-  return reference.name ?? FALLBACK_LABELS[reference.kind]
+  const meta = KIND_META[reference.kind]
+  if (meta === undefined) return FALLBACK_LABELS[reference.kind]
+  return `${meta.icon} ${meta.label}${reference.name === undefined ? '' : ` · ${reference.name}`}`
 }
 
 /** Return clipboard text containing display-safe labels instead of valid wire tokens. */
