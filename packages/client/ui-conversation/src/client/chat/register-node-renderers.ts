@@ -14,9 +14,14 @@ import { TurnTailNodeView } from './TurnTailNodeView.tsx'
  */
 export function registerChatNodeRenderers(ctx: Context): void {
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(
-    { name: 'conversation.chat.node', key: 'user', locale: NS }, UserMessageNodeView))
+    {
+      name: 'conversation.chat.node',
+      key: 'user',
+      locale: NS,
+      children: { 'conversation.message.footer': { kind: 'list', scope: 'session' } },
+    }, UserMessageNodeView as never))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(
-    { name: 'conversation.chat.node', key: 'steering', locale: NS }, UserMessageNodeView))
+    { name: 'conversation.chat.node', key: 'steering', locale: NS }, UserMessageNodeView as never))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(
     { name: 'conversation.chat.node', key: 'context', locale: NS }, ContextMessageNodeView))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(

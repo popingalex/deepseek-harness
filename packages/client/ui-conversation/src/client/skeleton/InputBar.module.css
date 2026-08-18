@@ -451,6 +451,10 @@
    rides the title tooltip. */
 .chip {
   position: relative;
+  border-radius: 6px;
+  /* The placeholder cell remains transparent; only the label paints the chip.
+     This prevents the unused width-class tail from looking like empty content. */
+  background: transparent;
 }
 
 .textRefTriggerGlyph {
@@ -475,12 +479,17 @@
   position: absolute;
   left: 5px;
   top: 50%;
-  width: calc(100% / 0.72 - 10px);
+   width: max-content;
+   max-width: calc(100% / 0.72 - 10px);
+   box-sizing: border-box;
+   padding: 0 5px;
   display: flex;
   align-items: center;
   justify-content: flex-start;
   overflow: hidden;
-  color: var(--dsw-alias-label-primary);
+   color: var(--dsw-alias-label-primary);
+   background: rgba(97, 135, 216, 0.22);
+   border-radius: 6px;
   white-space: nowrap;
   transform: translateY(-50%) scale(0.72);
   transform-origin: left center;

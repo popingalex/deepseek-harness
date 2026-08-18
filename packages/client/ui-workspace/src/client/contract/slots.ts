@@ -23,7 +23,8 @@
  * contract and the same occupant.
  */
 import type { HostDescriptionSource } from '@deepseek-ai/dsh-client-connection/client'
-import type { HostObservable, PropsHooks, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, PropsHooks, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ReactNode } from 'react'
 // Type-only: pull the owner SlotMap merges into programs that resolve the
 // runtime shares below.
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
@@ -31,6 +32,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
   SessionId, SessionSearchResultItem, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionVisibilityResolver } from '../tree.ts'
+import type { SessionGroupingResolver } from '../tree.ts'
 import type { createWorkspaceViewStore } from '../stores.ts'
 
 /**
@@ -57,6 +60,17 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.hero.workspace.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
     /** Directory-flow hole under the sidebar browsing region (declared by the WorkspaceBrowser entry). */
     'sidebar.workspaces.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
+    /** Session-row lead badge: plugin renders a compact marker/avatars before
+     * the session title (e.g. Emergency Harness team sessions show 🛡 + roles).
+     * Declared by the WorkspaceBrowser entry; a composition with no occupant
+     * simply shows the plain title. session-maybe scope: the row is rendered
+     * outside a session area (sidebar), so no SessionProvider is injected. */
+    'sidebar.session.badge': { kind: 'single'; scope: 'session-maybe'; owner: { sessionId: SessionId; title: string } }
+    /** Session-list create entry: a plugin may add its own session-kind
+     * creation button in the sidebar header (e.g. Emergency Harness 团队会话
+     * next to the standard New Session). list kind so several plugins can
+     * contribute; each receives an empty owner object. */
+    'sidebar.session.create': { kind: 'list'; scope: 'root'; owner: Record<string, never> }
   }
 }
 
@@ -92,6 +106,34 @@ export type WorkspaceBrowserInjected = {
     /** Current generation's Host description, bound by the slot renderer. */
     hostDescription: HostDescriptionSource
   }
+  /**
+   * Optional plugin-provided session-visibility resolver (e.g. Emergency
+   * Harness shows its blank team sessions / hides internal runtimes).
+   * Undefined keeps the built-in blank-hidden rule.
+   */
+  sessionVisibility?: SessionVisibilityResolver | undefined
+  /**
+   * Optional team-grouping resolver (09 §5): classifies a session as a team
+   * group (with its role children) or a role child; null = ordinary session.
+   */
+  sessionGrouping?: SessionGroupingResolver | undefined
+  /**
+   * Optional session-list projection seam (09r §3/§5): a stable provider
+   * whose data is reactive — subscribe() fires when the projection changes,
+   * so the tree re-derives without polling or resolver re-provision.
+   */
+  sessionListProjection?: {
+    hydrate: () => { phase: string; revision: number }
+    subscribe: (listener: () => void) => () => void
+  } | undefined
+  /** Extra entries for the New-Session menu (single-agent + team same level,
+   * 08-replan §8). Each entry carries its own creation action. */
+  createSessionEntries?: readonly {
+    id: string
+    label: ReactNode
+    icon?: ReactNode
+    run: () => void
+  }[] | undefined
   /**
    * Start a New Session in a Workspace: reuse-or-create its blank session and
    * open it; without an explicit workspace, inherit the current Session
@@ -142,7 +184,7 @@ export type WorkspaceBrowserInjected = {
 /** Full browser props: shell owner share + viewing store + injected actions + the locale seat. */
 export type WorkspaceBrowserProps =
   PropsRuntime<'sidebar.workspaces'>
-  & PropsRenderSlots<'sidebar.workspaces.directoryFlow'>
+  & PropsRenderSlots<'sidebar.workspaces.directoryFlow' | 'sidebar.session.badge' | 'sidebar.session.create'>
   & PropsStore<ReturnType<typeof createWorkspaceViewStore>>
   & Omit<WorkspaceBrowserInjected, 'hooks'>
   & PropsHooks<WorkspaceBrowserInjected['hooks']>

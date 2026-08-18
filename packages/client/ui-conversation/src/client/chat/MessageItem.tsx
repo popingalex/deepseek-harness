@@ -11,7 +11,7 @@ import type {
 import {
   JsonBlock, MessageText, ReferenceText, StateDot, projectStructuredReferenceText,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps } from '../contract/slots.ts'
+import type { ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps, MessageFooterOwnerProps } from '../contract/slots.ts'
 import { ReferenceIcon } from '../reference/ReferenceIcon.tsx'
 import { CompactionItem } from './CompactionItem.tsx'
 import { ContextInjectionRow } from './ContextInjectionRow.tsx'
@@ -216,7 +216,7 @@ function projectUserText(text: string, sessionLabels: readonly string[]): ReactN
 
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
-  content, renderMessageImages, actions, pending = false, referenceLabels = [], t,
+  content, renderMessageImages, actions, pending = false, referenceLabels = [], t, footer,
 }: {
   content: readonly unknown[]
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
@@ -227,6 +227,8 @@ function UserStyleBubble({
   /** Exact session mention labels associated by the adjacent recall node. */
   referenceLabels?: readonly string[]
   t: ChatViewSlotProps['t']
+  /** Per-message footer strip (e.g. annotation badges / geo links). */
+  footer?: ReactNode
 }): ReactNode {
   const { text, images, rest } = contentParts(content)
   const truncated = (total: number): string => t('json.truncated', { total })
@@ -247,6 +249,7 @@ function UserStyleBubble({
             {t('message.referenceSummary', { labels: referenceLabels.join(t('message.referenceSeparator')) })}
           </div>
         )}
+        {footer}
       </div>
       {actions?.(projectStructuredReferenceText(text))}
     </div>
@@ -284,9 +287,52 @@ export function PendingSteeringBubble({ content, renderMessageImages, t }: {
 
 /** User and admitted-steering keyed Chat renderer. */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-  node, renderMessageImages, t,
-}: ChatNodeViewProps<'user' | 'steering'>) {
+export const UserMessageNodeView = memo(function UserMessageNodeView({
+  node, renderMessageImages, t, renderSlot,
+}: ChatNodeViewProps<'user' | 'steering'> & {
+  /** Per-message footer render share; absent in isolated render tests. */
+  renderSlot?: (key: string, owner: object, opts?: { fallback?: ReactNode; hookContext?: unknown }) => ReactNode
+}) {
   const data = node.data
+  const text = contentParts(data.content).text
+  const footer = renderSlot === undefined
+    ? null
+    : renderSlot('conversation.message.footer', {
+      messageId: undefined,
+      text,
+      nodeKey: node.key,
+    } satisfies MessageFooterOwnerProps, { fallback: null })
+  // Emergency Harness team projection: user/message carries an ehTeam source
+  // (actor/kind/refs). Render an actor head above the native bubble and keep
+  // the footer capsule slot for refs (08-replan §6/§16).
+  type EhTeamSource = { ehTeam?: { displayName?: string; roleName?: string; avatar?: { icon?: string }; kind?: string } } | undefined
+  const eh = (data.source as EhTeamSource)?.ehTeam
+  if (eh !== undefined) {
+    return (
+      <div className={css.ehActorRow} data-eh-native-actor={eh.kind ?? 'message'}>
+        <div className={css.ehActorHead}>
+          <span className={css.ehActorAvatar} aria-hidden>{eh.avatar?.icon ?? '🤖'}</span>
+          <span className={css.ehActorName}>{eh.displayName ?? ''}{eh.roleName ? ` · ${eh.roleName}` : ''}</span>
+          {eh.kind ? <span className={css.ehActorKind}>{eh.kind}</span> : null}
+        </div>
+        <UserStyleBubble
+          content={data.content}
+          renderMessageImages={renderMessageImages}
+          t={t}
+          actions={text => (
+            <MessageIconActions
+              text={text}
+              time={data.time}
+              clock="start"
+              className={css.actions}
+              t={t}
+            />
+          )}
+          footer={footer}
+        />
+      </div>
+    )
+  }
   return (
     <UserStyleBubble
       content={data.content}
@@ -302,6 +348,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
           t={t}
         />
       )}
+      footer={footer}
     />
   )
 })

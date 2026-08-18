@@ -288,6 +288,7 @@ function mount(slots: SlotRegistry, nodes: ConversationSnapshot['nodes'] = NODES
         useStore={bindSnapshotSelector(chat)}
         actions={chat.actions}
         renderSlot={renderSlot}
+        renderSlotChain={((_k: string, _o: unknown, opts?: { fallback?: unknown }) => opts?.fallback ?? null) as never}
         views={views}
         releaseSessionImages={vi.fn()}
         useInput={useInput}

@@ -110,9 +110,11 @@ function rowHalf(e: { clientY: number; currentTarget: HTMLElement }): 'before' |
  * @param props.t - the browser root's locale seat.
  * @returns the row element.
  */
-export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home, t }: {
+export function ProjectRowItem({ group, onToggle, onOpenFeed, onCreate, actions, drag, home, t }: {
   group: GroupNode
   onToggle: () => void
+  /** Team group: opening the group row opens the public feed session (09 §28). */
+  onOpenFeed?: (() => void) | undefined
   onCreate: () => void
   /** Real-Workspace actions; absent for the ungrouped bucket (no menu shown). */
   actions?: { rename: () => void; delete: () => void } | undefined
@@ -123,10 +125,16 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
   t: RowTranslate
 }) {
   const row = group
+  const isTeam = row.team !== undefined
   // The ungrouped bucket has no workspace title: its label is dictionary copy.
-  const label = row.workspaceId === undefined ? t('group.ungrouped') : row.label
+  const label = isTeam ? (row.team?.messageCount != null ? `${row.label} · ${row.team.messageCount}` : row.label) : (row.workspaceId === undefined ? t('group.ungrouped') : row.label)
   const active = group.expanded && group.containsCurrent
   const [menuOpen, setMenuOpen] = useState(false)
+  const teamLead = row.team !== undefined
+    ? <span className={css.teamLead} data-eh-team-group="true" title={`${row.team.status}`}>
+      {(row.team.avatars ?? []).map(a => <span key={a.role} className={css.teamAvatar} data-eh-team-group-avatar={a.role}>{a.icon}</span>)}
+    </span>
+    : null
   const workspaceMenuItems = [
     { id: 'rename', label: t('rename'), icon: <IconEditOutline16 /> },
     { id: 'delete', label: t('delete.workspace'), icon: <IconTrashOutline16 />, danger: true },
@@ -136,7 +144,8 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
       className={clsx(css.projectRow, menuOpen && css.menuOpen)}
       role="treeitem"
       aria-expanded={row.expanded}
-      onClick={onToggle}
+      {...(isTeam ? { 'data-eh-session-badge': 'team', 'data-eh-team-row': 'true' } : {})}
+      onClick={isTeam && onOpenFeed !== undefined ? onOpenFeed : onToggle}
       draggable={drag !== undefined}
       onDragStart={drag === undefined
         ? undefined
@@ -154,6 +163,7 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
         <IconTriangleRightFill14 className={clsx(css.arrow, row.expanded && css.arrowOpen)} />
       </span>
       <span className={css.projectText}>
+        {teamLead}
         <span className={css.title}>{label}</span>
       </span>
       <span className={css.rowActions}>
@@ -425,7 +435,10 @@ export function SearchResultItem({ result, currentId, onOpen, t }: {
  * @param props.t - the browser root's locale seat.
  * @returns the session row.
  */
-export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork, onArchive, drag, flat = false, emergencyMetadata, t }: {
+export function SessionNodeItem({
+  node, currentId, now, onOpen, onRename, onFork, onArchive, drag, flat = false,
+  emergencyMetadata, renderSlot, t,
+}: {
   node: SessionNode
   currentId: string | undefined
   now: number
@@ -441,10 +454,16 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
   /** The row is rendered without a parent Workspace header. */
   flat?: boolean | undefined
   emergencyMetadata?: EmergencySessionRowMetadata | undefined
+  /** Optional renderer for the `sidebar.session.badge` child slot (lead marker before the title). */
+  renderSlot?: WorkspaceBrowserProps['renderSlot'] | undefined
   t: RowTranslate
 }) {
   const row = node
-  const title = displayTitle(node, t)
+  const title = node.teamRole?.kind === 'feed'
+    ? '🌐 团队公共流'
+    : node.teamRole?.kind === 'role'
+      ? `👤 ${node.teamRole.displayName}`
+      : displayTitle(node, t)
   const selected = node.id === currentId
   const statuses = sessionStatuses(node, t)
   const primaryStatus = statuses[0]
@@ -524,6 +543,7 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
           <SessionKindIcon metadata={emergencyMetadata} />
         </span>
       )}
+      {renderSlot !== undefined && renderSlot('sidebar.session.badge', { sessionId: node.id, title })}
       <span className={css.title}>{title}</span>
       {teamParticipants !== undefined && (
         <span
