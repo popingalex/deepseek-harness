@@ -167,11 +167,18 @@ export function ConversationRoot({
   )
 
   const phase = settling ? 'settling' : hero ? 'hero' : 'active'
-  const composer = renderSlotChain(
-    'conversation.composer',
-    { interactions: pending, session },
-    { fallback: composerBar, overlay: true },
-  )
+  // 09r: an Emergency Team session is a summary view — hide the composer
+  // (each agent speaks in its own DeepSeek conversation). EH sets the flag
+  // on <html> while its team summary is mounted.
+  const teamSummaryActive = session?.sessionId != null
+    && document.documentElement.getAttribute('data-eh-team-active') === session.sessionId
+  const composer = teamSummaryActive
+    ? null
+    : renderSlotChain(
+      'conversation.composer',
+      { interactions: pending, session },
+      { fallback: composerBar, overlay: true },
+    )
 
   // Sticky wraps the whole chain output (fallback + elected overlay), not
   // only `.composerStack`: overlay:true renders those as siblings, and sticky

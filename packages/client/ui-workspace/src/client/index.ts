@@ -75,6 +75,10 @@ export function apply(ctx: ClientContext): void {
     // the current Session Workspace before the recent-Workspace fallback.
     startSession: (workspaceId) => { ctx.workspaces.startSession(workspaceId) },
     open: (sessionId) => { ctx.sessions.open(sessionId) },
+    sessionVisibility: (ctx.get as (key: string) => unknown | undefined)?.('sessionVisibility') as WorkspaceBrowserInjected['sessionVisibility'],
+    sessionGrouping: (ctx.get as (key: string) => unknown | undefined)?.('sessionGrouping') as WorkspaceBrowserInjected['sessionGrouping'],
+    sessionListProjection: (ctx.get as (key: string) => unknown | undefined)?.('sessionListProjection') as WorkspaceBrowserInjected['sessionListProjection'],
+    createSessionEntries: (ctx.get as (key: string) => unknown | undefined)?.('sessionCreateEntries') as WorkspaceBrowserInjected['createSessionEntries'],
     searchSessions,
     searchResultLimit: ctx.sessions.searchResultLimit,
     renameSession: async (sessionId, title) => {
@@ -113,7 +117,11 @@ export function apply(ctx: ClientContext): void {
   ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register(
     {
       name: 'sidebar.workspaces',
-      children: { 'sidebar.workspaces.directoryFlow': { kind: 'single', scope: 'root' } },
+      children: {
+        'sidebar.workspaces.directoryFlow': { kind: 'single', scope: 'root' },
+        'sidebar.session.badge': { kind: 'single', scope: 'session-maybe' },
+        'sidebar.session.create': { kind: 'list', scope: 'root' },
+      },
       store: createWorkspaceViewStore(),
       inject: browserInjected,
       locale: NS,

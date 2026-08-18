@@ -199,7 +199,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
     switch (nodeOwner.node.kind) {
       case 'user':
       case 'steering':
-        return <UserMessageNodeView {...nodeProps<'user' | 'steering'>()} />
+        return <UserMessageNodeView {...nodeProps<'user' | 'steering'>()} renderSlot={renderSlot as NonNullable<React.ComponentProps<typeof UserMessageNodeView>['renderSlot']>} />
       case 'context':
         return <ContextMessageNodeView {...nodeProps<'context'>()} />
       case 'assistant-step':

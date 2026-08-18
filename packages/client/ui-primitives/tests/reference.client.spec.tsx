@@ -49,20 +49,20 @@ describe('structured references', () => {
     expect(parseStructuredReferences(malformed)).toEqual([{ kind: 'text', text: malformed }])
   })
 
-  it('uses only user-facing names for non-location references', () => {
-    expect(formatStructuredReference({ kind: 'asset', id: 'asset-row-991', name: 'V-17 转运歧管' })).toBe('V-17 转运歧管')
-    expect(formatStructuredReference({ kind: 'issue', id: 'issue-row-204' })).toBe('问题引用')
-    expect(formatStructuredReference({ kind: 'fact', id: 'fact-row-773', name: '氯气浓度 120 ppm' })).toBe('氯气浓度 120 ppm')
+  it('shows the object type and user-facing name for non-location references', () => {
+    expect(formatStructuredReference({ kind: 'asset', id: 'asset-row-991', name: 'V-17 转运歧管' })).toBe('▣ 资产 · V-17 转运歧管')
+    expect(formatStructuredReference({ kind: 'issue', id: 'issue-row-204' })).toBe('! 问题')
+    expect(formatStructuredReference({ kind: 'fact', id: 'fact-row-773', name: '氯气浓度 120 ppm' })).toBe('◆ 事实 · 氯气浓度 120 ppm')
   })
 
   it('renders the same reference chip from direct and segmented projections', () => {
     const reference = { kind: 'asset', id: 'asset-row-991', name: 'V-17 转运歧管' } as const
     const direct = render(<ReferenceChip reference={reference} />)
-    expect(direct.container.querySelector('[data-reference-chip="asset"]')?.textContent).toBe('V-17 转运歧管')
+    expect(direct.container.querySelector('[data-reference-chip="asset"]')?.textContent).toBe('▣ 资产 · V-17 转运歧管')
     direct.unmount()
 
     const segmented = render(<ReferenceText text={'资产 [[EH_REF_V1:{"kind":"asset","id":"asset-row-991","name":"V-17 转运歧管"}]]'} />)
-    expect(segmented.container.querySelector('[data-reference-chip="asset"]')?.textContent).toBe('V-17 转运歧管')
+    expect(segmented.container.querySelector('[data-reference-chip="asset"]')?.textContent).toBe('▣ 资产 · V-17 转运歧管')
     expect(segmented.container.textContent).not.toContain('EH_REF_V1')
     expect(segmented.container.textContent).not.toContain('asset-row-991')
   })

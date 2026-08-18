@@ -132,6 +132,29 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'conversation.chat.commandview': { kind: 'keyed'; scope: 'session'; owner: CommandRowOwnerProps }
     /**
+     * Per-message footer strip rendered below a user message bubble
+     * (Emergency Harness uses it for annotation badges + geo links).
+     * Declared by the chat view entry as a child of the user/steering
+     * message nodes; contributors render by ascending `order`. Multiple
+     * plugins may register; the original message renderer is untouched.
+     */
+    'conversation.message.footer': { kind: 'list'; scope: 'session'; owner: MessageFooterOwnerProps }
+    /**
+     * Right-hand details column content: an additive strip above the tool
+     * details seat. The conversation stays visible while this column is open
+     * (Emergency Harness renders the Situation view here). List entries
+     * render by ascending `order`.
+     */
+    'conversation.details.panel': { kind: 'list'; scope: 'session'; owner: DetailsPanelOwnerProps }
+    /**
+     * Middle-column session renderer chain: entries decide whether they own
+     * the current session's body. The first non-null result wins; the
+     * standard conversation (chat view) is the fallback. This lets a plugin
+     * render a different session experience for its own session kinds while
+     * leaving every standard DSH session untouched (08-updated §7).
+     */
+    'conversation.session.renderer': { kind: 'chain'; scope: 'session'; owner: SessionRendererOwnerProps }
+    /**
      * The completed Turn Node's extension chain, rendered before that Node's
      * IconActions. Entries derive a match from the engine-owned Turn and
      * closing seq before mounting, so presentation components never mount
@@ -426,6 +449,25 @@ export interface ChatNodeOwnerProps {
   fileMentions: (owner: TurnTailOwnerProps) => MarkdownFileMentions | undefined
 }
 
+/** Owner currency of one `conversation.message.footer` list entry. */
+export interface MessageFooterOwnerProps {
+  /** Durable message identity (the message id when the turn provides one). */
+  messageId: MessageId | undefined
+  /** The user message's joined plain text (for client-side geo/keyword scan). */
+  text: string
+  /** Stable chat node key (fallback identity when messageId is absent). */
+  nodeKey: string
+}
+
+/** Owner currency of one `conversation.details.panel` list entry (session-scope). */
+export interface DetailsPanelOwnerProps {}
+
+/** Owner currency of one `conversation.session.renderer` chain entry. */
+export interface SessionRendererOwnerProps {
+  /** The current session identity the renderer may decide to own. */
+  sessionId: SessionId
+}
+
 /** Full props of one registered keyed Chat business renderer. */
 export type ChatNodeViewProps<Kind extends ChatNodeKind = ChatNodeKind> =
   PropsRuntime<'conversation.chat.node', Kind> & PropsLocale<'conversation'>
@@ -653,7 +695,7 @@ export type ConversationSlotProps =
 /** Full strict-session body props: per-session store, view ring, and draft mirror. */
 export type ConversationSessionSlotProps =
   PropsRuntime<'conversation.session'>
-  & PropsRenderSlots<'conversation.view'>
+  & PropsRenderSlots<'conversation.view' | 'conversation.session.renderer'>
   & PropsStore<ChatStore>
   & ConversationSessionInjected
 
@@ -807,7 +849,7 @@ export interface DetailsInjected {
 }
 
 /** Full details-slot props: selection store, Tool output seat, injected close callback, and locale. */
-export type DetailsSlotProps = PropsRuntime<'details'> & PropsRenderSlots<'conversation.details.tool'>
+export type DetailsSlotProps = PropsRuntime<'details'> & PropsRenderSlots<'conversation.details.tool' | 'conversation.details.panel'>
   & PropsStore<ChatStore> & DetailsInjected & PropsLocale<'conversation'>
 
 /** Owner share common to the hero / New-Session Workspace pickers. */

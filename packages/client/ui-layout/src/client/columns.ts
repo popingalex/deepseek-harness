@@ -34,9 +34,17 @@ export const SIDEBAR_AUTO_COLLAPSE = 1024
 /** Details drag clamp floor. */
 export const DETAILS_MIN = 300
 /** Details drag clamp ceiling. */
-export const DETAILS_MAX = 520
+export const DETAILS_MAX = 1200
 /** Details width before any user drag. */
 export const DETAILS_DEFAULT = 360
+
+/**
+ * Effective details cap for a viewport: the panel may grow up to half the
+ * frame (DSH ⇄ EH 水平均分) but never below its floor when open.
+ */
+export function detailsCap(viewport: number): number {
+  return Math.min(DETAILS_MAX, Math.max(DETAILS_MIN, Math.floor(viewport * 0.5)))
+}
 
 /**
  * Clamp a panel width into its contract range.
@@ -62,9 +70,9 @@ export function clampWidth(px: number, min: number, max: number): number {
 export function computeColumns(viewport: number, sidebar: number, details: number): Columns {
   // The sidebar is fixed at its preference (or the rail) — it never concedes.
   const s = sidebar === 0 ? SIDEBAR_COLLAPSED : clampWidth(sidebar, SIDEBAR_MIN, SIDEBAR_MAX)
-  const d0 = details === 0 ? 0 : clampWidth(details, DETAILS_MIN, DETAILS_MAX)
-
   // Step 1: everything fits at preferred widths.
+  const detailsCap0 = detailsCap(viewport)
+  const d0 = details === 0 ? 0 : Math.min(detailsCap0, clampWidth(details, DETAILS_MIN, DETAILS_MAX))
   if (s + d0 + CENTER_MIN <= viewport) return { sidebar: s, center: viewport - s - d0, details: d0 }
 
   // Step 2: shrink details toward its minimum.
