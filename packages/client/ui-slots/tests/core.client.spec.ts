@@ -82,6 +82,47 @@ describe('a-priori root and declaration gate', () => {
       Comp as never,
     )).toThrow(/already declared.*test\.single/)
   })
+
+  it('sibling entries of one parent slot share an identical child declaration until the last cell leaves', () => {
+    const core = new SlotCore()
+    mountFrame(core)
+    const stock = core.register(
+      { name: 'test.keyed', key: 'cell', children: { 'test.grandchild': { kind: 'single', scope: 'root' } } },
+      Comp as never,
+    )
+    // Priority shadow of the same cell: shares the declaration, no conflict.
+    const shadow = core.register(
+      { name: 'test.keyed', key: 'cell', priority: -10, children: { 'test.grandchild': { kind: 'single', scope: 'root' } } },
+      Comp as never,
+    )
+    // A sibling cell (same parent slot, another key) shares it too.
+    const sibling = core.register(
+      { name: 'test.keyed', key: 'other', children: { 'test.grandchild': { kind: 'single', scope: 'root' } } },
+      Comp as never,
+    )
+    expect(core.specDynamic('test.grandchild')).toEqual({ kind: 'single', scope: 'root' })
+    stock()
+    expect(core.specDynamic('test.grandchild')).toEqual({ kind: 'single', scope: 'root' })
+    sibling()
+    expect(core.specDynamic('test.grandchild')).toEqual({ kind: 'single', scope: 'root' })
+    shadow()
+    expect(core.specDynamic('test.grandchild')).toBeUndefined()
+  })
+
+  it('a sibling redeclaration with a different spec still throws', () => {
+    const core = new SlotCore()
+    mountFrame(core)
+    core.register(
+      { name: 'test.keyed', key: 'cell', children: { 'test.grandchild': { kind: 'single', scope: 'root' } } },
+      Comp as never,
+    )
+    expect(() => core.register(
+      // Options erased: the SlotMap pins 'test.grandchild' to single/root, so a
+      // mismatched spec cannot typecheck — the runtime guard is under test.
+      { name: 'test.keyed', key: 'shadow', children: { 'test.grandchild': { kind: 'list', scope: 'root' } } } as never,
+      Comp as never,
+    )).toThrow(/already declared/)
+  })
 })
 
 describe('lifecycle cascade (one axis)', () => {

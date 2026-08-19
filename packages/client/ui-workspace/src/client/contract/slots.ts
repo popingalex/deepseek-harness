@@ -114,7 +114,8 @@ export type WorkspaceBrowserInjected = {
   sessionVisibility?: SessionVisibilityResolver | undefined
   /**
    * Optional team-grouping resolver (09 §5): classifies a session as a team
-   * group (with its role children) or a role child; null = ordinary session.
+   * session (its role members render as nested child rows) or a role member
+   * (excluded from top-level rows); null = ordinary session.
    */
   sessionGrouping?: SessionGroupingResolver | undefined
   /**

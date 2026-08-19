@@ -116,9 +116,67 @@ describe('workspace browser rows', () => {
       fireEvent.focus(row)
       expect(document.querySelector('[data-eh-session-members-focus="team"]')?.textContent).toContain('指挥协调')
       expect(document.querySelector('[data-eh-session-members-focus="team"]')?.textContent).toContain('online')
+      fireEvent.blur(row)
+      expect(document.querySelector('[data-eh-session-members-focus="team"]')).toBeNull()
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('flips the keyboard-focus member panel left near the right viewport edge', () => {
+    const node: SessionNode = {
+      id: sid('team'), title: 'Response Team', blank: false, running: false,
+      runningSubagentCount: 0, completed: false, updatedAt: 0,
+    }
+    const metadata: EmergencySessionRowMetadata = {
+      kind: 'team',
+      participants: [{ displayName: '现场指挥员', roleName: '指挥协调', status: 'online' }],
+    }
+    render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
+      onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} emergencyMetadata={metadata} t={t} />)
+    const row = screen.getByRole('treeitem')
+    // Right edge at the jsdom viewport width (1024): the panel no longer fits on the right.
+    row.getBoundingClientRect = () => ({
+      top: 100, bottom: 132, left: 900, right: 1000, width: 100, height: 32,
+      x: 900, y: 100, toJSON: () => ({}),
+    })
+    fireEvent.focus(row)
+    expect(document.querySelector('[data-eh-session-members-focus="team"]')).toBeTruthy()
+  })
+
+  it('ignores keyboard focus on rows without emergency participants', () => {
+    const node: SessionNode = {
+      id: sid('plain'), title: 'Plain', blank: false, running: false,
+      runningSubagentCount: 0, completed: false, updatedAt: 0,
+    }
+    render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
+      onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
+    fireEvent.focus(screen.getByRole('treeitem'))
+    expect(document.querySelector('[data-eh-session-members-focus]')).toBeNull()
+  })
+
+  it('renders team feed and role titles from the teamRole classification', () => {
+    const feed: SessionNode = {
+      id: sid('feed'), title: 'Feed', blank: false, running: false,
+      runningSubagentCount: 0, completed: false, updatedAt: 0,
+      teamRole: { kind: 'feed' },
+    }
+    const view = render(<SessionNodeItem node={feed} currentId={undefined} now={0} onOpen={vi.fn()}
+      onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
+    expect(screen.getByText('🌐 团队公共流')).toBeTruthy()
+
+    view.rerender(<SessionNodeItem
+      node={{
+        ...feed, id: sid('role'),
+        teamRole: { kind: 'role', role: 'commander', displayName: '现场指挥员', avatar: '🚒' },
+      }}
+      currentId={undefined} now={0} onOpen={vi.fn()}
+      onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
+    // Member rows carry one plain user icon (no emoji in the title, no
+    // second session-kind badge).
+    expect(screen.getByText('现场指挥员')).toBeTruthy()
+    expect(view.container.querySelector('[data-eh-session-badge="role"] [data-eh-member-user-icon]')).toBeTruthy()
+    expect(view.container.querySelector('[data-eh-session-badge="standard"]')).toBeNull()
   })
 
   it('omits only an empty leading status slot in the hierarchy-free flat list', () => {
@@ -209,6 +267,33 @@ describe('workspace browser rows', () => {
     expect(screen.queryByRole('button', { name: /展开|收起/ })).toBeNull()
     fireEvent.click(row)
     expect(onOpen).toHaveBeenCalledWith(node.id)
+  })
+
+  it('toggles the member list from its chevron without opening the session', () => {
+    const node: SessionNode = {
+      id: sid('team'), title: 'Response Team', blank: false, running: false,
+      runningSubagentCount: 0, completed: false, updatedAt: 0,
+    }
+    const onToggle = vi.fn()
+    const onOpen = vi.fn()
+    const view = render(
+      <SessionNodeItem node={node} currentId={undefined} now={0} onOpen={onOpen}
+        onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()}
+        expand={{ expanded: false, onToggle }} t={t} />,
+    )
+    const chevron = screen.getByRole('button', { name: '展开成员' })
+    expect(chevron.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(chevron)
+    expect(onToggle).toHaveBeenCalledOnce()
+    expect(onOpen).not.toHaveBeenCalled()
+
+    view.rerender(
+      <SessionNodeItem node={node} currentId={undefined} now={0} onOpen={onOpen}
+        onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()}
+        expand={{ expanded: true, onToggle }} t={t} />,
+    )
+    const collapse = screen.getByRole('button', { name: '收起成员' })
+    expect(collapse.getAttribute('aria-expanded')).toBe('true')
   })
 
   it('shows the green done dot only on a finished, unviewed session (live activity wins the slot)', () => {
