@@ -518,7 +518,7 @@ describe('workspace browser rows', () => {
     expect(screen.queryByRole('button', { name: /工作区/ })).toBeNull()
   })
 
-  it('blank New Session rows carry no menu, no time label, and no hover-card time', () => {
+  it('blank New Session rows carry an archive-only menu, no time label, and no hover-card time', () => {
     vi.useFakeTimers()
     try {
       const node: SessionNode = {
@@ -527,8 +527,10 @@ describe('workspace browser rows', () => {
       }
       render(<SessionNodeItem node={node} currentId={node.id} now={0} onOpen={vi.fn()}
         onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
-      // The placeholder has no content yet: no row verbs, no "now" stamp.
-      expect(screen.queryByRole('button', { name: /会话.*的操作/ })).toBeNull()
+      // The placeholder has no content yet: only the archive row action is
+      // offered (rename/fork would act on content that does not exist), no
+      // "now" stamp.
+      expect(screen.queryByRole('button', { name: /会话.*的操作/ })).toBeTruthy()
       expect(screen.queryByText('刚刚')).toBeNull()
       // The hover card keeps title + status but drops the timestamp line.
       const wrapper = screen.getByRole('treeitem').parentElement as HTMLElement

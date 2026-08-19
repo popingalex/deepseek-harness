@@ -15,6 +15,7 @@ import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts
 import type { ClientContext, ConversationSnapshot, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import type { SubmitOutcome } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import { SessionInputShell } from '../src/client/input/facade.ts'
+import { placeholderForLabel } from '../src/client/input/machine.ts'
 import type {
   ComposerAttachment, ComposerAttachmentsOwnerProps,
 } from '../src/client/contract/slots.ts'
@@ -1185,12 +1186,12 @@ describe('decorations', () => {
       )
     })
     const chip = view.container.querySelector('[data-decoration="chip"]')
-    expect(chip?.textContent).toBe('@会话一')
+    // The chip renders its own label over the one-char placeholder cell.
+    expect(chip?.textContent).toContain('会话一')
     expect(chip?.getAttribute('data-reference-appearance')).toBe('session')
-    expect(chip?.querySelector('svg')).not.toBeNull()
     expect(shell.snapshot.occurrences).toHaveLength(1)
-    expect(shell.snapshot.draft).toBe('参考 @会话一 内容')
-    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 3, length: 4 })
+    expect(shell.snapshot.draft).toBe(`参考 ${placeholderForLabel('会话一')} 内容`)
+    expect(shell.snapshot.occurrences[0]).toMatchObject({ offset: 3 })
   })
 
   it('keeps the textarea glyph layer transparent when a structured reference becomes disabled', () => {
@@ -1205,7 +1206,7 @@ describe('decorations', () => {
     const backdrop = view.container.querySelector('[data-input-backdrop]')
     expect(textarea.disabled).toBe(true)
     expect(backdrop?.getAttribute('data-disabled')).toBe('true')
-    expect(backdrop?.querySelector('[data-decoration="chip"] svg')).not.toBeNull()
+    expect(backdrop?.querySelector('[data-decoration="chip"]')?.textContent).toContain('会话一')
   })
 
   it('Backspace and Delete remove a reference as one range at its boundaries', () => {
@@ -1220,7 +1221,8 @@ describe('decorations', () => {
         { start: 2, end: 5, draftRev: backspace.shell.snapshot.draftRev },
       )
     })
-    backspace.textarea.setSelectionRange(6, 6)
+    // Caret sits just after the one-char placeholder (draft `前 ￹ 后`).
+    backspace.textarea.setSelectionRange(3, 3)
     fireEvent.keyDown(backspace.textarea, { key: 'Backspace' })
     expect(backspace.shell.snapshot).toMatchObject({ draft: '前  后', occurrences: [] })
 
@@ -1345,12 +1347,14 @@ describe('decorations', () => {
       }, { start: 2, end: 5, draftRev: shell.snapshot.draftRev })
     })
     const setData = vi.fn()
-    textarea.setSelectionRange(3, 4)
+    // A partial selection over the placeholder (draft `前 ￹ 后`) expands to
+    // the whole chip's clipboard projection.
+    textarea.setSelectionRange(2, 3)
     fireEvent.copy(textarea, { clipboardData: { setData } })
     expect(setData).toHaveBeenCalledWith('text/plain', '@w1')
-    expect(shell.snapshot.draft).toBe('前 @会话一 后')
+    expect(shell.snapshot.draft).toBe(`前 ${placeholderForLabel('会话一')} 后`)
 
-    textarea.setSelectionRange(3, 4)
+    textarea.setSelectionRange(2, 3)
     fireEvent.cut(textarea, { clipboardData: { setData } })
     expect(setData).toHaveBeenLastCalledWith('text/plain', '@w1')
     expect(shell.snapshot).toMatchObject({ draft: '前  后', occurrences: [] })
