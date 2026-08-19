@@ -47,7 +47,6 @@ export function placeholderForLabel(label: string): string {
   }
   return em <= 7 ? PLACEHOLDER_CLASSES[0] : em <= 10 ? PLACEHOLDER_CLASSES[1] : em <= 13 ? PLACEHOLDER_CLASSES[2] : PLACEHOLDER_CLASSES[3]
 }
-}
 
 /** The machine never writes the queue; the wiring layer overlays the queue store's projection. */
 const EMPTY_QUEUE: InputState['queue'] = []
@@ -235,7 +234,7 @@ export class InputMachine {
     const delta = range.insertedLength - (range.end - range.start)
     const kept: Occurrence[] = []
     for (const o of this.occurrences) {
-      if (o.offset + o.length <= range.start) kept.push(o)
+      if (o.offset < range.start) kept.push(o)
       else if (o.offset >= range.end) kept.push(delta === 0 ? o : { ...o, offset: o.offset + delta })
     }
     this.occurrences = kept
@@ -331,7 +330,7 @@ export class InputMachine {
     const gap = tail.length === 0 || tail[0] !== ' ' ? ' ' : ''
     const inserted = placeholderForLabel(reference.label) + gap
     this.reconcile({ start: span.start, end: span.end, insertedLength: inserted.length })
-    this.withMinted([this.mint(reference, span.start, displayText.length)])
+    this.withMinted([this.mint(reference, span.start)])
     this.adopt(this.draft.slice(0, span.start) + inserted + tail)
     this.watchClaim()
     return inserted.length

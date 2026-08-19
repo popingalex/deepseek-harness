@@ -343,7 +343,7 @@ describe('structured reference action', () => {
       .toContain('东门 (121.100000, 31.200000)')
     act(() => { b.shell.actions.submit() })
     await vi.waitFor(() => {
-      expect(b.sink).toHaveBeenCalledWith(`请前往 [[EH_REF_V1:${envelope}]]`, [], 'queue')
+      expect(b.sink).toHaveBeenCalledWith(`请前往 [[EH_REF_V1:${envelope}]]`, [], 'queue', expect.any(AbortSignal))
     })
   })
 })

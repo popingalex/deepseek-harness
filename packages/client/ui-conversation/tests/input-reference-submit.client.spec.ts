@@ -7,10 +7,14 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { InputTriggerController, SubmitOutcome } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import { SessionInputShell } from '../src/client/input/facade.ts'
+import { placeholderForLabel } from '../src/client/input/machine.ts'
 import type { DraftAttachmentId } from '../src/client/input/contract.ts'
 
 const mention = '@[Research](dsh-session:InNvdXJjZSI)'
 const spacedMention = '@[Research notes](dsh-session:InNvdXJjZSI)'
+/** Placeholder chars backing the inserted chips (narrow width class for these latin labels). */
+const P = placeholderForLabel('Research')
+const P2 = placeholderForLabel('Research notes')
 const commandImages = {
   serialize: () => Promise.resolve([]),
   release: () => {},
@@ -53,7 +57,7 @@ describe('reference submission', () => {
       end: 4,
       draftRev: first.snapshot.draftRev,
     })).toBe(true)
-    expect(first.snapshot.draft).toBe('@Research notes ')
+    expect(first.snapshot.draft).toBe(`${P2} `)
     expect(mirror).toHaveBeenLastCalledWith(`${spacedMention} `)
 
     const sink = vi.fn(() => Promise.resolve<SubmitOutcome>({ kind: 'success' }))
@@ -91,8 +95,8 @@ describe('reference submission', () => {
     })
     chip(shell)
     expect(shell.snapshot).toMatchObject({
-      draft: '@Research ',
-      occurrences: [{ source: 'reference', ref: mention, label: 'Research', offset: 0, length: 9 }],
+      draft: `${P} `,
+      occurrences: [{ source: 'reference', ref: mention, label: 'Research', offset: 0 }],
     })
 
     shell.submit('queue')
@@ -102,8 +106,8 @@ describe('reference submission', () => {
     })
     expect(sink).toHaveBeenNthCalledWith(1, mention, [], 'queue', expect.any(AbortSignal))
     expect(shell.snapshot).toMatchObject({
-      draft: '@Research ',
-      occurrences: [{ source: 'reference', ref: mention, label: 'Research', offset: 0, length: 9 }],
+      draft: `${P} `,
+      occurrences: [{ source: 'reference', ref: mention, label: 'Research', offset: 0 }],
     })
     expect(shell.notices.getSnapshot()).toMatchObject({
       level: 'error',
@@ -137,7 +141,7 @@ describe('reference submission', () => {
       expect(shell.snapshot.phase).toBe('plain')
     })
     expect(sink).not.toHaveBeenCalled()
-    expect(shell.snapshot.draft).toBe('@Research ')
+    expect(shell.snapshot.draft).toBe(`${P} `)
     expect(shell.snapshot.occurrences).toHaveLength(1)
     expect(shell.notices.getSnapshot()).toMatchObject({
       level: 'error',
