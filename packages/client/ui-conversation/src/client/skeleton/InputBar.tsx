@@ -26,7 +26,7 @@ import { deriveDecorations } from '../input/decorations.ts'
 import type { DraftDecorations } from '../input/decorations.ts'
 import { PLACEHOLDER } from '../input/machine.ts'
 import {
-  attachmentErrorText, attachmentRailLabels, dropOverlayLabels, imageSizeText, lightboxLabels,
+  attachmentErrorText, imageSizeText,
 } from '../image-labels.ts'
 import { ReferenceIcon } from '../reference/ReferenceIcon.tsx'
 import { ContextMeter } from './ContextMeter.tsx'
@@ -301,13 +301,15 @@ export function InputBar({
       && (e.key === 'Backspace' || e.key === 'Delete')) {
       const selection = selectionOf(e.currentTarget)
       if (selection.start === selection.end) {
+        // Placeholders occupy exactly one char, so a caret at the chip edge
+        // deletes the whole chip with native single-char semantics.
         const occurrence = input.occurrences.find(o => e.key === 'Backspace'
-          ? o.offset + o.length === selection.start
+          ? o.offset + 1 === selection.start
           : o.offset === selection.start)
         if (occurrence !== undefined) {
           e.preventDefault()
           const start = occurrence.offset
-          const end = occurrence.offset + occurrence.length
+          const end = occurrence.offset + 1
           keyboard.setDraft(draft.slice(0, start) + draft.slice(end), { start, end, insertedLength: 0 })
           restoreCaret(e.currentTarget, start)
           keyboard.track(keyboard.snapshot.draft, start)
@@ -386,17 +388,17 @@ export function InputBar({
     const el = e.currentTarget
     const { start, end } = selectionOf(el)
     if (start === end) return
-    const touched = input.occurrences.filter(o => o.offset < end && o.offset + o.length > start)
+    const touched = input.occurrences.filter(o => o.offset < end && o.offset + 1 > start)
     if (touched.length === 0 && !cut) return // plain copy of plain text: native path is fine
     e.preventDefault()
     const copyStart = touched.reduce((value, o) => Math.min(value, o.offset), start)
-    const copyEnd = touched.reduce((value, o) => Math.max(value, o.offset + o.length), end)
+    const copyEnd = touched.reduce((value, o) => Math.max(value, o.offset + 1), end)
     // Expand structured ranges to their owner clipboard projections.
     let text = ''
     let cursor = copyStart
     for (const o of touched) {
       text += draft.slice(cursor, o.offset) + o.clipboardText
-      cursor = o.offset + o.length
+      cursor = o.offset + 1
     }
     text += draft.slice(cursor, copyEnd)
     e.clipboardData.setData('text/plain', text)

@@ -471,19 +471,18 @@ export class SessionInputShell implements SessionInput {
       if (inputTriggers === undefined) throw new Error(`no serializer for reference source "${o.source}"`)
       return {
         offset: o.offset,
-        length: o.length,
         text: await inputTriggers.serializeReference(o.source, o.ref, controller.signal),
       }
     })).then(
       (parts) => {
         if (this.disposed) return
-        // Splice model forms over their display ranges (offsets are draft-time;
+        // Splice model forms over their placeholders (offsets are draft-time;
         // parts arrive offset-sorted since the table is).
         let out = ''
         let cursor = 0
         for (const part of parts) {
           out += draft.slice(cursor, part.offset) + part.text
-          cursor = part.offset + part.length
+          cursor = part.offset + 1
         }
         out += draft.slice(cursor)
         this.settleSubmit(attempt, this.deps.defaultSink(out.trim(), imageIds, mode, attempt.signal), imageIds)

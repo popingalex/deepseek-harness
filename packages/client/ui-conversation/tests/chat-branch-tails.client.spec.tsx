@@ -156,7 +156,7 @@ describe('MessageItem arms', () => {
         source: null,
       }} />,
     )
-    expect(view.container.querySelector('[data-reference-chip="asset"]')?.textContent).toBe('V-17 转运歧管')
+    expect(view.container.querySelector('[data-reference-chip="asset"]')?.textContent).toBe('▣ 资产 · V-17 转运歧管')
     expect(view.container.textContent).not.toContain('EH_REF_V1')
     expect(view.container.textContent).not.toContain('asset-row-internal')
   })
@@ -169,7 +169,7 @@ describe('MessageItem arms', () => {
       renderMessageImages={renderMessageImages}
       t={t}
     />)
-    expect(view.container.querySelector('[data-reference-chip="fact"]')?.textContent).toBe('氯气浓度 120 ppm')
+    expect(view.container.querySelector('[data-reference-chip="fact"]')?.textContent).toBe('◆ 事实 · 氯气浓度 120 ppm')
     expect(view.container.textContent).not.toContain('EH_REF_V1')
     expect(view.container.textContent).not.toContain('fact-row-internal')
   })

@@ -50,6 +50,25 @@ async function responseJson(response: Response): Promise<unknown> {
   return response.json()
 }
 
+/**
+ * Event drafts live only in the EH client's in-memory registry
+ * (`globalThis.__EH_EVENT_DRAFTS__`, a Map of sessionId → draft info): they
+ * are deliberately not persisted to the server until the event is promoted,
+ * so the session-list endpoint cannot see them. Fold them in here so a blank
+ * event draft still renders its event kind (badge/title) instead of the
+ * generic standard "New Session" placeholder.
+ */
+function eventDraftIds(value: unknown): ReadonlySet<string> {
+  const drafts = value as { entries?: () => Iterable<unknown> } | null | undefined
+  if (drafts === null || typeof drafts !== 'object' || typeof drafts.entries !== 'function') return new Set()
+  const ids = new Set<string>()
+  for (const entry of drafts.entries()) {
+    const id = Array.isArray(entry) ? entry[0] : undefined
+    if (typeof id === 'string') ids.add(id)
+  }
+  return ids
+}
+
 export function useEmergencySessionRows(): EmergencySessionRowsState {
   const [state, setState] = useState<EmergencySessionRowsState>({ ready: false, bySession: new Map() })
   useEffect(() => {
@@ -64,7 +83,11 @@ export function useEmergencySessionRows(): EmergencySessionRowsState {
         ))
         return [sessionId, { kind, participants: participantRows(participants) }] as const
       }))
-      if (!controller.signal.aborted) setState({ ready: true, bySession: new Map(entries) })
+      const merged = new Map(entries)
+      for (const id of eventDraftIds((globalThis as { __EH_EVENT_DRAFTS__?: unknown }).__EH_EVENT_DRAFTS__)) {
+        if (!merged.has(id)) merged.set(id, { kind: 'event', participants: [] })
+      }
+      if (!controller.signal.aborted) setState({ ready: true, bySession: merged })
     }
     void load().catch((reason: unknown) => {
       if (controller.signal.aborted) return

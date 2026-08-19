@@ -113,6 +113,23 @@ describe('emergency session row metadata', () => {
     expect(request).toHaveBeenCalledTimes(2)
   })
 
+  it('folds in-memory event drafts (not yet persisted) into the row map as event rows', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
+      if (String(input).endsWith('/api/emergency-session/sessions')) {
+        return new Response(JSON.stringify({ sessions: [] }))
+      }
+      return new Response(JSON.stringify({ participants: [] }))
+    }))
+    vi.stubGlobal('__EH_EVENT_DRAFTS__', new Map([['draft-a', { location: null }]]))
+    const view = renderHook(() => useEmergencySessionRows())
+    await waitFor(() => { expect(view.result.current.ready).toBe(true) })
+    const draft = view.result.current.bySession.get('draft-a')
+    if (draft?.kind !== 'event') throw new Error('draft-a metadata missing')
+    expect(draft.participants).toEqual([])
+    // A persisted session's metadata still wins over a same-id draft entry.
+    expect(view.result.current.bySession.size).toBe(1)
+  })
+
   it('drops a late resolution once unmounted', async () => {
     let resolveSessions!: (response: Response) => void
     vi.stubGlobal('fetch', vi.fn((input: string | URL | Request) => {

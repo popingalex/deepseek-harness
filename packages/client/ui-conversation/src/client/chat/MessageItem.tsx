@@ -287,7 +287,6 @@ export function PendingSteeringBubble({ content, renderMessageImages, t }: {
 
 /** User and admitted-steering keyed Chat renderer. */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-export const UserMessageNodeView = memo(function UserMessageNodeView({
   node, renderMessageImages, t, renderSlot,
 }: ChatNodeViewProps<'user' | 'steering'> & {
   /** Per-message footer render share; absent in isolated render tests. */

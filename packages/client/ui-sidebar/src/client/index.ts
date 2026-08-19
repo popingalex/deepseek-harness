@@ -7,7 +7,6 @@ import { SidebarRoot } from './SidebarRoot.tsx'
 import { en, zh, type SidebarKey } from './locales.ts'
 
 export type {
-export type {
   SidebarBrandMarkOwnerProps, SidebarBrandNameOwnerProps, SidebarCreateActionOwnerProps, SidebarFooterActionOwnerProps,
   SidebarRootComponentProps, SidebarRootInjected, SidebarSectionOwnerProps, SidebarSettingsOwnerProps,
 } from './contract/slots.ts'
