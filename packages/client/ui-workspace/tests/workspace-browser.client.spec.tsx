@@ -249,6 +249,58 @@ describe('WorkspaceBrowser', () => {
     expect(screen.queryByText('alpha-s')).toBeNull()
   })
 
+  it('nests team role sessions as expandable member rows inside the Workspace group', () => {
+    const sessions = sessionState([summary('team', 3), summary('role-a', 2), summary('plain', 1)])
+    const b = mount({
+      useSessions: hook(sessions),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['team', 'role-a', 'plain'])])),
+      sessionGrouping: (id: string) => {
+        if (id === 'team') {
+          return {
+            kind: 'team' as const, title: 'Response Team', status: 'active', avatars: [],
+            roles: [{ role: 'commander', sessionId: 'role-a', displayName: '现场指挥员', avatar: '🚒' }],
+          }
+        }
+        if (id === 'role-a') {
+          return {
+            kind: 'role' as const, teamId: 'team', role: 'commander', displayName: '现场指挥员', avatar: '🚒',
+          }
+        }
+        return null
+      },
+    })
+    fireEvent.click(screen.getByText('alpha'))
+    // The team session is an ordinary row inside its Workspace group; the
+    // role session never appears as a top-level row, and no team pseudo-group
+    // header leads the tree.
+    expect(screen.getByText('team')).toBeTruthy()
+    expect(screen.getByText('plain')).toBeTruthy()
+    expect(screen.queryByText('Response Team')).toBeNull()
+    expect(screen.queryByText('现场指挥员')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '展开成员' }))
+    expect(b.store.getSnapshot().groupExpansion['team:team']).toBe(true)
+    expect(screen.getByText('现场指挥员')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: '收起成员' }))
+    expect(b.store.getSnapshot().groupExpansion['team:team']).toBe(false)
+    expect(screen.queryByText('现场指挥员')).toBeNull()
+  })
+
+  it('renders no member chevron on a team session without visible members', () => {
+    const sessions = sessionState([summary('team', 3)])
+    mount({
+      useSessions: hook(sessions),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['team'])])),
+      sessionGrouping: (id: string) => id === 'team'
+        ? { kind: 'team' as const, title: 'Response Team', status: 'active', avatars: [], roles: [] }
+        : null,
+    })
+    fireEvent.click(screen.getByText('alpha'))
+    expect(screen.getByText('team')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /成员/ })).toBeNull()
+  })
+
   it('shows five sessions by default and clears transient show-all when the Workspace collapses', () => {
     const items = Array.from({ length: 7 }, (_, index) => summary(`session-${index + 1}`, 7 - index))
     const b = mount({

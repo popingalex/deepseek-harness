@@ -10,7 +10,7 @@ import clsx from 'clsx'
 import {
   HoverCard, IconArchiveOutline20, IconBranchOutline16, IconEditOutline16,
   IconEllipsisOutline16, IconFolderClose16, IconFolderOpen16, IconPlusOutline16,
-  IconNewChatOutline16, IconTrashOutline16, IconTriangleRightFill14, IconUserOutline16, Menu, StateDot,
+  IconNewChatOutline16, IconTrashOutline16, IconTriangleRightFill14, Menu, StateDot,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { abbreviateHomePath } from '@deepseek-ai/dsh-client-runtime/client'
@@ -110,11 +110,9 @@ function rowHalf(e: { clientY: number; currentTarget: HTMLElement }): 'before' |
  * @param props.t - the browser root's locale seat.
  * @returns the row element.
  */
-export function ProjectRowItem({ group, onToggle, onOpenFeed, onCreate, actions, drag, home, t }: {
+export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home, t }: {
   group: GroupNode
   onToggle: () => void
-  /** Team group: opening the group row opens the public feed session (09 §28). */
-  onOpenFeed?: (() => void) | undefined
   onCreate: () => void
   /** Real-Workspace actions; absent for the ungrouped bucket (no menu shown). */
   actions?: { rename: () => void; delete: () => void } | undefined
@@ -125,16 +123,10 @@ export function ProjectRowItem({ group, onToggle, onOpenFeed, onCreate, actions,
   t: RowTranslate
 }) {
   const row = group
-  const isTeam = row.team !== undefined
   // The ungrouped bucket has no workspace title: its label is dictionary copy.
-  const label = isTeam ? (row.team?.messageCount != null ? `${row.label} · ${row.team.messageCount}` : row.label) : (row.workspaceId === undefined ? t('group.ungrouped') : row.label)
+  const label = row.workspaceId === undefined ? t('group.ungrouped') : row.label
   const active = group.expanded && group.containsCurrent
   const [menuOpen, setMenuOpen] = useState(false)
-  const teamLead = row.team !== undefined
-    ? <span className={css.teamLead} data-eh-team-group="true" title={`${row.team.status}`}>
-      {(row.team.avatars ?? []).map(a => <span key={a.role} className={css.teamAvatar} data-eh-team-group-avatar={a.role}>{a.icon}</span>)}
-    </span>
-    : null
   const workspaceMenuItems = [
     { id: 'rename', label: t('rename'), icon: <IconEditOutline16 /> },
     { id: 'delete', label: t('delete.workspace'), icon: <IconTrashOutline16 />, danger: true },
@@ -144,8 +136,7 @@ export function ProjectRowItem({ group, onToggle, onOpenFeed, onCreate, actions,
       className={clsx(css.projectRow, menuOpen && css.menuOpen)}
       role="treeitem"
       aria-expanded={row.expanded}
-      {...(isTeam ? { 'data-eh-session-badge': 'team', 'data-eh-team-row': 'true' } : {})}
-      onClick={isTeam && onOpenFeed !== undefined ? onOpenFeed : onToggle}
+      onClick={onToggle}
       draggable={drag !== undefined}
       onDragStart={drag === undefined
         ? undefined
@@ -163,7 +154,6 @@ export function ProjectRowItem({ group, onToggle, onOpenFeed, onCreate, actions,
         <IconTriangleRightFill14 className={clsx(css.arrow, row.expanded && css.arrowOpen)} />
       </span>
       <span className={css.projectText}>
-        {teamLead}
         <span className={css.title}>{label}</span>
       </span>
       <span className={css.rowActions}>
@@ -310,20 +300,22 @@ function EmergencyMembers({ sessionId, participants }: {
   )
 }
 
+/** Event/team session badge: lucide `calendar` glyph at 18px. */
 function EventCalendarIcon() {
   return (
     <svg
       width="18"
       height="18"
-      viewBox="0 0 16 16"
+      viewBox="0 0 24 24"
       fill="none"
       aria-hidden="true"
       data-eh-event-calendar-icon
     >
+      <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       <path
-        d="M3.25 3.25h9.5v9.5h-9.5zM3.5 6h9M5.5 2v2.5M10.5 2v2.5"
+        d="M16 2v4M8 2v4M3 10h18"
         stroke="currentColor"
-        strokeWidth="1.25"
+        strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -331,11 +323,35 @@ function EventCalendarIcon() {
   )
 }
 
+/** Team member (role session) badge: lucide `user` glyph at 16px. */
+function MemberUserIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      data-eh-member-user-icon
+    >
+      <path
+        d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 function SessionKindIcon({ metadata }: { metadata: EmergencySessionRowMetadata }) {
   switch (metadata.kind) {
-    case 'team': return <IconUserOutline16 />
+    case 'team': return <EventCalendarIcon />
     case 'event': return <EventCalendarIcon />
     case 'standard': return <IconNewChatOutline16 />
+    /* v8 ignore next -- closed EmergencySessionRowMetadata union */
     default: return assertNever(metadata)
   }
 }
@@ -345,6 +361,7 @@ function sessionKindLabel(metadata: EmergencySessionRowMetadata): string {
     case 'team': return '应急团队会话'
     case 'event': return '事件会话'
     case 'standard': return '单人会话'
+    /* v8 ignore next -- closed EmergencySessionRowMetadata union */
     default: return assertNever(metadata)
   }
 }
@@ -432,12 +449,13 @@ export function SearchResultItem({ result, currentId, onOpen, t }: {
  * @param props.onArchive - archive a session by id.
  * @param props.drag - optional draggable-row wiring.
  * @param props.flat - omit the empty status slot in the hierarchy-free flat list.
+ * @param props.expand - optional member-list chevron (team session rows, 09 §5).
  * @param props.t - the browser root's locale seat.
  * @returns the session row.
  */
 export function SessionNodeItem({
   node, currentId, now, onOpen, onRename, onFork, onArchive, drag, flat = false,
-  emergencyMetadata, renderSlot, t,
+  emergencyMetadata, expand, renderSlot, t,
 }: {
   node: SessionNode
   currentId: string | undefined
@@ -454,16 +472,27 @@ export function SessionNodeItem({
   /** The row is rendered without a parent Workspace header. */
   flat?: boolean | undefined
   emergencyMetadata?: EmergencySessionRowMetadata | undefined
+  /** Team member-list toggle; absent when the session has no members to show. */
+  expand?: { expanded: boolean; onToggle: () => void } | undefined
   /** Optional renderer for the `sidebar.session.badge` child slot (lead marker before the title). */
   renderSlot?: WorkspaceBrowserProps['renderSlot'] | undefined
   t: RowTranslate
 }) {
   const row = node
+  // EH event/team rows keep a real label even while blank: the generic
+  // "New Session" placeholder would otherwise mislabel an event draft as a
+  // plain new session. Ordinary rows (kind: 'standard') keep the native
+  // blank "New Session" placeholder. Use the emergency kind label until the
+  // session gains its own title (blank DSH sessions refuse rename until
+  // first content).
+  const isEmergencyRow = emergencyMetadata?.kind === 'event' || emergencyMetadata?.kind === 'team'
   const title = node.teamRole?.kind === 'feed'
     ? '🌐 团队公共流'
     : node.teamRole?.kind === 'role'
-      ? `👤 ${node.teamRole.displayName}`
-      : displayTitle(node, t)
+      ? node.teamRole.displayName
+      : (node.blank && isEmergencyRow)
+        ? (emergencyMetadata.kind === 'event' ? '事件处置' : '应急团队会话')
+        : displayTitle(node, t)
   const selected = node.id === currentId
   const statuses = sessionStatuses(node, t)
   const primaryStatus = statuses[0]
@@ -483,6 +512,13 @@ export function SessionNodeItem({
     // 20-native glyph in the menu's 16px icon slot (Menu.module.css .itemIcon).
     { id: 'archive', label: t('menu.archiveSession'), icon: <IconArchiveOutline20 size={16} /> },
   ]
+  // A blank New Session row is a provisional placeholder (nothing happened in
+  // it yet): rename/fork would act on content that does not exist, so only
+  // archive (removes the placeholder from the list) is offered. This keeps
+  // accidental blank sessions removable instead of piling up forever.
+  const rowMenuItems = row.blank
+    ? sessionMenuItems.filter(item => item.id === 'archive')
+    : sessionMenuItems
   // Figma session cell: pad 8, status slot 16, then a 4px title gap.
   const ownRow = (
     <div
@@ -538,9 +574,36 @@ export function SessionNodeItem({
           {showStatus && <SessionStatusDots statuses={statuses} />}
         </span>
       )}
-      {emergencyMetadata !== undefined && (
-        <span className={css.sessionKind} data-eh-session-badge={emergencyMetadata.kind} aria-hidden="true">
-          <SessionKindIcon metadata={emergencyMetadata} />
+      {node.teamRole?.kind === 'role' ? (
+        <span className={css.sessionKind} data-eh-session-badge="role" aria-hidden="true">
+          <MemberUserIcon />
+        </span>
+      ) : (emergencyMetadata !== undefined || expand !== undefined) && (
+        <span className={css.sessionKind} {...(emergencyMetadata !== undefined ? { 'data-eh-session-badge': emergencyMetadata.kind } : {})}>
+          <span
+            aria-hidden="true"
+            className={clsx(
+              css.kindGlyph,
+              expand !== undefined && css.kindGlyphSwappable,
+              expand?.expanded === true && css.kindGlyphHidden,
+            )}
+          >
+            {emergencyMetadata !== undefined && <SessionKindIcon metadata={emergencyMetadata} />}
+          </span>
+          {/* The type-glyph seat doubles as the member-list toggle: hover (or
+              the expanded state) swaps in the chevron, same pattern as the
+              Workspace folder row — no separate column, no indent. */}
+          {expand !== undefined && (
+            <button
+              type="button"
+              className={clsx(css.kindChevron, expand.expanded && css.kindChevronExpanded)}
+              aria-expanded={expand.expanded}
+              aria-label={expand.expanded ? t('members.collapse') : t('members.expand')}
+              onClick={(e) => { e.stopPropagation(); expand.onToggle() }}
+            >
+              <IconTriangleRightFill14 className={clsx(css.arrow, expand.expanded && css.arrowOpen)} />
+            </button>
+          )}
         </span>
       )}
       {renderSlot !== undefined && renderSlot('sidebar.session.badge', { sessionId: node.id, title })}
@@ -555,16 +618,16 @@ export function SessionNodeItem({
         </span>
       )}
       {/* A blank New Session row is a provisional placeholder: nothing has
-          happened in it yet, so a "now" timestamp and the row verbs
-          (rename/fork/archive) would all act on content that does not
-          exist — both trailing cells stay off until the first prompt. */}
+          happened in it yet, so the "now" timestamp stays off until the first
+          prompt. The row menu is still available (archive-only for blanks) so
+          a stray blank session can be removed instead of piling up. */}
       {!row.blank && <span className={css.time}>{timeLabel(row.updatedAt, now, t)}</span>}
-      {!row.blank && (
+      {(
         <span className={css.rowActions}>
           <Menu
             open={menuOpen}
             onClose={() => { setMenuOpen(false) }}
-            items={sessionMenuItems}
+            items={rowMenuItems}
             onSelect={(id) => {
               setMenuOpen(false)
               if (id === 'rename') onRename(node.id, row.title)

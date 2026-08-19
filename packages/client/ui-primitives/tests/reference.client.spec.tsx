@@ -17,9 +17,11 @@ describe('structured references', () => {
     expect(segments).toHaveLength(3)
     const reference = segments[1]
     if (reference?.kind !== 'reference') throw new Error('reference segment missing')
-    expect(formatStructuredReference(reference.reference)).toBe('📍 东门 (121.100000, 31.200000) · 14:05:00')
+    // The chip time follows the viewer's local timezone, so the golden only
+    // pins the shape (HH:mm:ss), not a zone-specific wall clock.
+    expect(formatStructuredReference(reference.reference)).toMatch(/^📍 东门 \(121\.100000, 31\.200000\) · \d{2}:\d{2}:\d{2}$/)
     expect(formatStructuredReference(reference.reference)).not.toContain('geo-object-internal-42')
-    expect(projectStructuredReferenceText(token)).toBe('📍 东门 (121.100000, 31.200000) · 14:05:00')
+    expect(projectStructuredReferenceText(token)).toMatch(/^📍 东门 \(121\.100000, 31\.200000\) · \d{2}:\d{2}:\d{2}$/)
   })
 
   it('formats location shapes with type icons and point-only coordinates', () => {

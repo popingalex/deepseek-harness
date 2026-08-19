@@ -124,12 +124,51 @@
 
 .sessionKind {
   flex: none;
-  width: 16px;
+  width: 18px;
   height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--dsw-alias-label-tertiary);
+}
+
+/* Expandable session rows: the kind-glyph seat doubles as the member-list
+   toggle. Hover (or the expanded state) swaps the type glyph for the
+   chevron — the same hover-swap the Workspace folder row uses, so no extra
+   column or indent appears. */
+.kindGlyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sessionRow:hover .kindGlyphSwappable {
+  display: none;
+}
+
+.kindGlyphHidden {
+  display: none;
+}
+
+.kindChevron {
+  display: none;
+  width: 18px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  align-items: center;
+  justify-content: center;
+  color: var(--dsw-alias-label-caption);
+  cursor: pointer;
+}
+
+.sessionRow:hover .kindChevron {
+  display: inline-flex;
+}
+
+.kindChevronExpanded {
+  display: inline-flex;
 }
 
 .memberCount {
@@ -441,24 +480,3 @@
     transition: none;
   }
 }
-
-/* ---- Emergency Harness team group (09 §5) ---- */
-.teamLead {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-right: 4px;
-}
-.teamAvatar {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--dsw-alias-bg-layer-2);
-  border: 1px solid var(--dsw-alias-border-l2);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  margin-left: -4px;
-}
-.teamAvatar:first-child { margin-left: 0; }

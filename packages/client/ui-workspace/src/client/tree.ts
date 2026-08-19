@@ -32,6 +32,13 @@ export interface SessionNode {
   updatedAt: number
   /** Team member classification (09 §5): 'feed' = public feed row, 'role' = role session row. */
   teamRole?: { kind: 'feed' } | { kind: 'role'; role: string; displayName: string; avatar: string }
+  /**
+   * Team member rows (09 §5): present (possibly empty) on a team session row;
+   * the renderer hides the expand affordance on an empty list.
+   */
+  children?: readonly SessionNode[]
+  /** The team row's member list is expanded (persisted under `team:<id>`). */
+  childrenExpanded?: boolean
 }
 
 /** Session order selected by the Workspace browser. */
@@ -54,15 +61,6 @@ export interface GroupNode {
   containsCurrent: boolean
   /** Visible session rows (empty while the group is folded). */
   sessions: readonly SessionNode[]
-  /** Team-group metadata (09 §5); absent for ordinary workspace groups. */
-  team?: {
-    status: string
-    avatars: readonly { role: string; icon: string }[]
-    /** The public-feed session id (the team session itself). */
-    feedId: string
-    roles: readonly { role: string; sessionId: string; displayName: string; avatar: string }[]
-    messageCount?: number
-  }
 }
 
 /** One flat search row combining list metadata with an optional content match. */
@@ -132,17 +130,17 @@ function byRecency(a: SessionSummary, b: SessionSummary): number {
  */
 export type SessionVisibilityResolver = (session: SessionSummary) => 'visible' | 'hidden' | undefined
 
-/** One team-group classification (09 §5). */
+/** One team classification (09 §5): the team session carries its role members as nested rows. */
 export interface TeamGroupInfo {
   kind: 'team'
   title: string
   status: string
   messageCount?: number
   avatars: readonly { role: string; icon: string }[]
-  /** Role children, each a standard DSH session id. */
+  /** Role members, each a standard DSH session id. */
   roles: readonly { role: string; sessionId: string; displayName: string; avatar: string }[]
 }
-/** Role-child classification: a session that belongs under a team group. */
+/** Role-member classification: a session that belongs under a team session row. */
 export interface TeamRoleInfo {
   kind: 'role'
   teamId: string
@@ -221,19 +219,18 @@ function groupByWorkspace(
   workspaces: readonly WorkspaceView[],
   archived: ReadonlySet<SessionId>,
   ungroupedOrder: readonly string[] | undefined,
-  resolver?: SessionVisibilityResolver,
-  exclude?: (session: SessionSummary) => boolean,
+  resolver: SessionVisibilityResolver | undefined,
+  exclude: (session: SessionSummary) => boolean,
 ): Group[] {
   const groups: Group[] = []
   const accounted = new Set<SessionId>()
-  const skip = exclude ?? (() => false)
   for (const workspace of workspaces) {
     const members: SessionSummary[] = []
     for (const id of workspace.sessionIds) {
       const summary = list.byId[id]
       if (summary === undefined) continue // account may lead the list pull; the row appears when the summary lands
       accounted.add(id)
-      if (skip(summary)) continue
+      if (exclude(summary)) continue
       if (!sessionVisible(summary, list.current, archived, resolver)) continue
       members.push(summary)
     }
@@ -245,7 +242,7 @@ function groupByWorkspace(
   const stray = list.ids
     .map(id => list.byId[id])
     .filter((s): s is SessionSummary =>
-      s !== undefined && !accounted.has(s.id) && !skip(s) && sessionVisible(s, list.current, archived, resolver))
+      s !== undefined && !accounted.has(s.id) && !exclude(s) && sessionVisible(s, list.current, archived, resolver))
   if (stray.length > 0) {
     groups.push(buildGroup(
       UNGROUPED_KEY,
@@ -309,48 +306,32 @@ export function deriveGroups(
         ?? UNGROUPED_KEY
   const groups: GroupNode[] = []
 
-  // 09 §5: team groups — a team session becomes a collapsible group row whose
-  // children are each role's standard DSH session. The group row itself IS
-  // the team session (public feed); role sessions are attributed to their
-  // team and excluded from the ordinary workspace/ungrouped lists.
+  // 09 §5: team sessions stay ordinary rows inside their Workspace (or
+  // Ungrouped) group; their role sessions never appear as top-level rows and
+  // surface as the team row's expandable member children instead.
   const attributedRoleSessions = new Set<SessionId>()
   if (grouping !== undefined) {
     for (const id of list.ids) {
-      const info = grouping(id)
-      if (info === null || info.kind !== 'team') continue
-      const teamId = id as SessionId
-      const feed = list.byId[teamId]
-      if (feed === undefined || archived.has(teamId) || feed.origin === 'subagent') continue
-      const members: SessionNode[] = []
-      for (const role of info.roles) {
-        const child = list.byId[role.sessionId as SessionId]
-        if (child === undefined || archived.has(role.sessionId as SessionId)) continue
-        attributedRoleSessions.add(role.sessionId as SessionId)
-        members.push(sessionNode(child, descendants, { kind: 'role', role: role.role, displayName: role.displayName, avatar: role.avatar }))
-      }
-      const expanded = expandedGroups.has(`team:${teamId}`)
-      groups.push({
-        key: `team:${teamId}`,
-        workspaceId: undefined,
-        cwd: undefined,
-        createdAt: undefined,
-        label: info.title,
-        sessionCount: members.length,
-        expanded,
-        containsCurrent: list.current === teamId || info.roles.some(r => r.sessionId === list.current),
-        sessions: expanded ? members : [],
-        team: { status: info.status, avatars: info.avatars, feedId: teamId, roles: info.roles, messageCount: info.messageCount ?? 0 },
-      })
+      if (grouping(id)?.kind === 'role') attributedRoleSessions.add(id)
     }
   }
 
-  const attributed = (session: SessionSummary): boolean => {
+  const withMembers = (session: SessionSummary): SessionNode => {
+    const node = sessionNode(session, descendants)
     const info = grouping?.(session.id as string)
-    return info !== null && info !== undefined && info.kind === 'role'
+    if (info?.kind !== 'team') return node
+    const members: SessionNode[] = []
+    for (const role of info.roles) {
+      const child = list.byId[role.sessionId as SessionId]
+      if (child === undefined || archived.has(role.sessionId as SessionId)) continue
+      members.push(sessionNode(child, descendants, { kind: 'role', role: role.role, displayName: role.displayName, avatar: role.avatar }))
+    }
+    return { ...node, children: members, childrenExpanded: expandedGroups.has(`team:${session.id as string}`) }
   }
+
   for (const g of groupByWorkspace(
     list, workspaces, archived, view.ungroupedOrder, resolver,
-    s => attributedRoleSessions.has(s.id as SessionId) || attributed(s),
+    s => attributedRoleSessions.has(s.id),
   )) {
     const expanded = expandedGroups.has(g.key)
     groups.push({
@@ -362,7 +343,7 @@ export function deriveGroups(
       sessionCount: g.sessions.length,
       expanded,
       containsCurrent: g.key === currentGroup,
-      sessions: expanded ? g.sessions.map(session => sessionNode(session, descendants)) : [],
+      sessions: expanded ? g.sessions.map(withMembers) : [],
     })
   }
   return groups

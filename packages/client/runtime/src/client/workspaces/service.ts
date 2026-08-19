@@ -72,7 +72,18 @@ export class WorkspaceRuntime implements IWorkspaces {
     this.manager.subscribe(() => { this.project() })
     this.sessions.list.subscribe(() => { this.project() })
     ctx.reflect.provide('workspaces', this, undefined)
+    this.domainClaim = (session) => {
+      // Optional domain claim (e.g. Emergency Harness event drafts), provided
+      // by the feature plugin as the `sessionVisibility` resolver: a claimed
+      // blank stays on grouping surfaces and is never reused by New Session.
+      const resolver = (ctx.get as (key: string) => unknown)('sessionVisibility') as
+        ((session: { id: SessionId }) => 'visible' | 'hidden' | undefined) | undefined
+      return resolver?.(session) === 'visible'
+    }
   }
+
+  /** Domain-claim probe; see the constructor. */
+  private readonly domainClaim: (session: { id: SessionId }) => boolean
 
   /**
    * Resolve the session a New Session flow lands in once this Workspace is
@@ -105,9 +116,12 @@ export class WorkspaceRuntime implements IWorkspaces {
     const sessions = this.sessions.list.getSnapshot()
     for (const id of sessions.ids) {
       const summary = sessions.byId[id]
+      // A domain-claimed blank (an EH event draft, say) belongs to that
+      // domain's flow; New Session never recycles it as an ordinary draft.
       if (summary !== undefined && summary.blank && summary.cwd === workspace.path
         && workspace.sessionIds.includes(summary.id)
-        && !archived.includes(summary.id)) return summary.id
+        && !archived.includes(summary.id)
+        && !this.domainClaim(summary)) return summary.id
     }
     const attempt = this.sessions.create({ workspaceId })
       .finally(() => { this.connecting.delete(workspaceId) })
