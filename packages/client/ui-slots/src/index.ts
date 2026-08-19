@@ -569,6 +569,8 @@ export interface StoredEntry {
   locale?: string | undefined
   /** Diagnostics label of who registered. */
   registrant?: string | undefined
+  /** Slot this entry was registered into (declaration-cell identity on release). */
+  slot?: string | undefined
 }
 
 /**
@@ -617,6 +619,13 @@ interface SlotRecord {
   declaredBy: string | undefined
   /** Live parent declaration, absent for root slots. */
   parent: string | undefined
+  /**
+   * Cells (parent slot + key/id + priority) whose entries currently declare
+   * this slot. Sibling entries of one parent slot — e.g. a priority shadow
+   * and the shadowed stock entry — share one child declaration instead of
+   * failing: the child collapses only when its last declaring cell leaves.
+   */
+  declarationCells: Set<string>
   /** Monotonic declaration lifetime, distinct from ordinary entry mutations. */
   declarationEpoch: number
   entries: readonly StoredEntry[]
@@ -709,11 +718,14 @@ export class SlotCore {
    *
    * Load-time validation (misconfiguration fails loud; the render hot path
    * re-checks nothing): registering into an undeclared slot throws; declaring
-   * an already-declared child key throws (one declarer per slot — the message
-   * names the first declarer); mounting one shared store handle under slots
-   * of different scopes throws. Kind constraints: keyed — missing `key`
-   * throws; list — missing `id` throws; chain — missing `select` throws (the
-   * selector is the entry's routing seat, see {@link ChainSelect}).
+   * an already-declared child key throws unless the live declaration belongs
+   * to a sibling entry of the same parent slot with an identical spec —
+   * priority shadows share the shadowed entry's child declaration (the
+   * child collapses when its last declaring cell leaves). Mounting one shared
+   * store handle under slots of different scopes throws. Kind constraints:
+   * keyed — missing `key` throws; list — missing `id` throws; chain —
+   * missing `select` throws (the selector is the entry's routing seat, see
+   * {@link ChainSelect}).
    *
    * Shadowing (single/keyed/list): entries sharing one cell (single — the
    * slot itself; keyed — same `key`; list — same `id`) coexist at distinct
@@ -823,10 +835,18 @@ export class SlotCore {
         break
     }
     if (options.children) {
-      for (const childKey of Object.keys(options.children)) {
+      for (const [childKey, childSpec] of Object.entries(options.children)) {
         const childRec = this.records.get(childKey)
         if (childRec?.spec) {
-          throw new Error(`slot "${childKey}" is already declared (by ${childRec.declaredBy ?? 'an unknown entry'})`)
+          // Sibling entries of the same parent slot (a priority shadow and
+          // the shadowed stock entry) may share one child declaration when
+          // the spec is identical; any other second declaration conflicts.
+          const shared = childRec.parent === options.name
+            && childRec.spec.kind === childSpec.kind
+            && childRec.spec.scope === childSpec.scope
+          if (!shared) {
+            throw new Error(`slot "${childKey}" is already declared (by ${childRec.declaredBy ?? 'an unknown entry'})`)
+          }
         }
       }
     }
@@ -857,6 +877,7 @@ export class SlotCore {
       ...(options.store !== undefined ? { store: options.store } : {}),
       ...(options.locale !== undefined ? { locale: options.locale } : {}),
       ...(options.registrant !== undefined ? { registrant: options.registrant } : {}),
+      slot: options.name,
     }
     const next = [...rec.entries, entry]
     // Stable sorts: priority ascending for every kind, ties keep registration
@@ -870,20 +891,30 @@ export class SlotCore {
     this.markDirty(options.name, rec)
     if (options.children) {
       const declarations: [key: string, record: SlotRecord][] = []
+      const fresh: SlotRecord[] = []
+      const cellId = `${options.name} ${options.key ?? ''} ${options.id ?? ''} ${options.priority ?? 0}`
       for (const [childKey, childSpec] of Object.entries(options.children)) {
         const childRec = this.record(childKey)
+        // A shared sibling declaration joins the cell set without re-arming
+        // the declaration lifetime (no epoch bump, no listener re-fire).
+        if (childRec.declarationCells.size > 0) {
+          childRec.declarationCells.add(cellId)
+          continue
+        }
+        childRec.declarationCells.add(cellId)
         childRec.spec = childSpec
         childRec.declaredBy = `an entry in "${options.name}"${options.registrant ? ` (${options.registrant})` : ''}`
         childRec.parent = options.name
         childRec.declarationEpoch += 1
         declarations.push([childKey, childRec])
+        fresh.push(childRec)
       }
       // Synchronous listeners may register into or try to redeclare a sibling;
       // publish only after the whole children table owns its declarations.
       for (const [childKey, childRec] of declarations) {
         this.markDirty(childKey, childRec)
       }
-      for (const [, childRec] of declarations) {
+      for (const childRec of fresh) {
         this.notifyDeclaration(childRec)
       }
     }
@@ -1132,16 +1163,22 @@ export class SlotCore {
       if (pinned && --pinned.count === 0) this.handleScopes.delete(entry.store)
     }
     if (!entry.children) return
+    const cellId = `${entry.slot ?? ''} ${entry.options.key ?? ''} ${entry.options.id ?? ''} ${entry.options.priority ?? 0}`
     for (const childKey of Object.keys(entry.children)) {
       const childRec = this.records.get(childKey)
       /* v8 ignore next -- defensive: declaring always creates the record */
       if (!childRec) continue
+      // A child slot shared by sibling cells (priority shadows) collapses
+      // only when its last declaring cell leaves the ledger.
+      childRec.declarationCells.delete(cellId)
+      if (childRec.declarationCells.size > 0) continue
       const doomed = childRec.entries
       childRec.spec = undefined
       childRec.declaredBy = undefined
       childRec.parent = undefined
       childRec.declarationEpoch += 1
       childRec.entries = NO_ENTRIES
+      childRec.declarationCells.clear()
       this.markDirty(childKey, childRec)
       this.notifyDeclaration(childRec)
       for (const dead of doomed) this.releaseEntry(dead)
@@ -1155,6 +1192,7 @@ export class SlotCore {
         spec: undefined,
         declaredBy: undefined,
         parent: undefined,
+        declarationCells: new Set(),
         declarationEpoch: 0,
         entries: NO_ENTRIES,
         version: 0,

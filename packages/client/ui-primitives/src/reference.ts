@@ -90,8 +90,8 @@ function parseEnvelope(version: string, payload: string): StructuredReference | 
 function formatTime(value: string): string | undefined {
   const date = new Date(value)
   if (!Number.isFinite(date.getTime())) return undefined
+  // Local timezone: reference times follow the viewer's clock, not a fixed zone.
   const parts = new Intl.DateTimeFormat('zh-CN', {
-    timeZone: 'Asia/Shanghai',
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
   }).formatToParts(date)

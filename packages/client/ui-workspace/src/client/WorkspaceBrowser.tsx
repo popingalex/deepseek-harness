@@ -9,7 +9,7 @@
  * menu in between; the flow and its error dialog live in WorkspacePicker
  * (same package — direct composition, no slot between them).
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconCloseFill14, IconPersonalizationOutline16,
@@ -269,7 +269,7 @@ function SessionTree({
   const list = useSessions(s => s)
   const current = list.current
   // U3: reactive projection — subscribe to EH store changes (revision bumps)
-  // so the team-group tree re-derives without polling or resolver re-provision.
+  // so the team-member tree re-derives without polling or resolver re-provision.
   const [ehProjectionRevision, setEhProjectionRevision] = useState(0)
   useEffect(() => {
     const unsub = sessionListProjection?.subscribe?.(() => setEhProjectionRevision(r => r + 1))
@@ -414,7 +414,6 @@ function SessionTree({
         )}
         {groups.map((group) => {
           const workspaceId = group.workspaceId
-          const team = group.team
           const workspaceMarker = workspaceId !== undefined && workspaceDrag?.over?.id === workspaceId
             ? workspaceDrag.over.half
             : null
@@ -480,12 +479,6 @@ function SessionTree({
                   }
                   setGroupExpanded(group.key, !group.expanded)
                 }}
-                onOpenFeed={team !== undefined ? () => {
-                  // 09 §28: opening the team group also expands it so the
-                  // feed + role children become visible.
-                  setGroupExpanded(group.key, true)
-                  open(team.feedId as SessionId)
-                } : undefined}
                 onCreate={() => {
                   if (group.workspaceId !== undefined) {
                     setGroupExpanded(group.key, true)
@@ -493,24 +486,18 @@ function SessionTree({
                   }
                 }}
                 drag={workspaceDragProps}
-                actions={team !== undefined
-                  ? {
-                    // team group row menu: rename the team session / archive it
-                    rename: () => onSessionRename(team.feedId as SessionId, group.label.replace(/\s·\s\d+$/, '')),
-                    delete: () => onSessionArchive(team.feedId as SessionId),
-                  }
-                  : group.workspaceId === undefined
-                    ? undefined
-                    : {
-                      rename: () => {
-                        /* v8 ignore next -- narrowing guard: the actions object exists only for real-workspace groups. */
-                        if (group.workspaceId !== undefined) onRenameRequest(group.workspaceId, group.label)
-                      },
-                      delete: () => {
-                        /* v8 ignore next -- narrowing guard: the actions object exists only for real-workspace groups. */
-                        if (group.workspaceId !== undefined) onDeleteRequest(group.workspaceId, group.label)
-                      },
-                    }}
+                actions={group.workspaceId === undefined
+                  ? undefined
+                  : {
+                    rename: () => {
+                      /* v8 ignore next -- narrowing guard: the actions object exists only for real-workspace groups. */
+                      if (group.workspaceId !== undefined) onRenameRequest(group.workspaceId, group.label)
+                    },
+                    delete: () => {
+                      /* v8 ignore next -- narrowing guard: the actions object exists only for real-workspace groups. */
+                      if (group.workspaceId !== undefined) onDeleteRequest(group.workspaceId, group.label)
+                    },
+                  }}
               />
               {(expandedSessionGroups.includes(group.key)
                 ? group.sessions
@@ -541,23 +528,54 @@ function SessionTree({
                     sessionDropCommitted.current = false
                   },
                 }
+                const memberRows = node.children ?? []
                 return (
-                  <SessionNodeItem
-                    key={node.id}
-                    node={node}
-                    currentId={current}
-                    now={now}
-                    onOpen={open}
-                    onRename={onSessionRename}
-                    onFork={forkSession}
-                    onArchive={onSessionArchive}
-                    emergencyMetadata={emergencySessions.ready
-                      ? emergencySessions.bySession.get(node.id) ?? STANDARD_SESSION_METADATA
-                      : undefined}
-                    drag={dragProps}
-                    renderSlot={renderSlot}
-                    t={t}
-                  />
+                  <Fragment key={node.id}>
+                    <SessionNodeItem
+                      node={node}
+                      currentId={current}
+                      now={now}
+                      onOpen={open}
+                      onRename={onSessionRename}
+                      onFork={forkSession}
+                      onArchive={onSessionArchive}
+                      emergencyMetadata={emergencySessions.ready
+                        ? emergencySessions.bySession.get(node.id) ?? STANDARD_SESSION_METADATA
+                        : undefined}
+                      expand={memberRows.length > 0
+                        ? {
+                          // Team member expansion shares the persisted group
+                          // expansion account under `team:<id>` (09 §5).
+                          expanded: node.childrenExpanded === true,
+                          onToggle: () => { setGroupExpanded(`team:${node.id as string}`, node.childrenExpanded !== true) },
+                        }
+                        : undefined}
+                      drag={dragProps}
+                      renderSlot={renderSlot}
+                      t={t}
+                    />
+                    {node.childrenExpanded === true && memberRows.length > 0 && (
+                      <div className={css.memberRows}>
+                        {memberRows.map(child => (
+                          <SessionNodeItem
+                            key={child.id}
+                            node={child}
+                            currentId={current}
+                            now={now}
+                            onOpen={open}
+                            onRename={onSessionRename}
+                            onFork={forkSession}
+                            onArchive={onSessionArchive}
+                            emergencyMetadata={emergencySessions.ready
+                              ? emergencySessions.bySession.get(child.id) ?? STANDARD_SESSION_METADATA
+                              : undefined}
+                            renderSlot={renderSlot}
+                            t={t}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </Fragment>
                 )
               })}
               {group.sessions.length > COLLAPSED_SESSION_LIMIT && (

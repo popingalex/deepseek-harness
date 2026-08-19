@@ -448,6 +448,15 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+/* Team member rows: indented run under their team session row (09 §5). */
+.memberRows {
+  padding-left: 18px;
+}
+
+.memberRows > * + * {
+  margin-top: 2px;
+}
+
 .empty {
   padding: 16px 12px;
   color: var(--dsw-alias-label-tertiary);

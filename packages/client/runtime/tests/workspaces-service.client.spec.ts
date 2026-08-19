@@ -287,6 +287,51 @@ describe('WorkspaceRuntime', () => {
     await expect(workspaces.connectWorkspace(wid('alpha'))).resolves.toBe('s-fresh-2')
   })
 
+  it('connectWorkspace skips a domain-claimed blank session', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const sessions = new SessionRuntime(ctx, api, fakeRemote())
+    const workspaces = new WorkspaceRuntime(ctx, api, sessions)
+    // A domain resolver (e.g. EH event drafts) claims its blank sessions:
+    // they stay visible on grouping surfaces and New Session must not recycle
+    // them as ordinary drafts.
+    ctx.provide('sessionVisibility', (session: { id: string }) => session.id === 's-claimed' ? 'visible' as const : undefined)
+    api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [workspace('alpha', [sid('s-claimed'), sid('s-normal')])] as never[],
+    }))
+    api.onList = () => Promise.resolve(ok({
+      items: [
+        // Claimed blank sorts first: the scan must skip it and keep looking.
+        { sessionId: sid('s-claimed'), updatedAt: 2, running: false, blank: true, cwd: '/w/alpha' },
+        { sessionId: sid('s-normal'), updatedAt: 1, running: false, blank: true, cwd: '/w/alpha' },
+      ] as never[],
+    }))
+    await Promise.all([workspaces.refresh(), sessions.refresh()])
+    await Promise.resolve()
+
+    // The ordinary member blank is adopted; the claimed one is left alone.
+    api.onCreate = payload => Promise.resolve(ok({
+      sessionId: (payload as { sessionId?: SessionId }).sessionId ?? sid('s-unexpected'),
+    }))
+    await expect(workspaces.connectWorkspace(wid('alpha'))).resolves.toBe('s-normal')
+    expect(api.callsOf('session.create')).toEqual([{
+      workspaceId: 'alpha', sessionId: 's-normal', reuseWorkspaceBlank: true,
+    }])
+
+    // With only the claimed blank around, New Session mints a fresh session.
+    api.onList = () => Promise.resolve(ok({
+      items: [{ sessionId: sid('s-claimed'), updatedAt: 2, running: false, blank: true, cwd: '/w/alpha' }] as never[],
+    }))
+    await sessions.refresh()
+    await Promise.resolve()
+    api.onCreate = () => Promise.resolve(ok({ sessionId: sid('s-fresh') }))
+    await expect(workspaces.connectWorkspace(wid('alpha'))).resolves.toBe('s-fresh')
+    expect(api.callsOf('session.create')).toEqual([
+      { workspaceId: 'alpha', sessionId: 's-normal', reuseWorkspaceBlank: true },
+      { workspaceId: 'alpha' },
+    ])
+  })
+
   it('a rejected first prompt keeps the blank session eligible for connectWorkspace reuse', async () => {
     const ctx = new Context()
     const api = new FakeApiClient()

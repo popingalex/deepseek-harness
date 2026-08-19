@@ -6,6 +6,9 @@ import {
   deriveFlat, deriveGroups, deriveSearchResults, workspaceLabel, relativeTime,
   UNGROUPED_KEY, UNGROUPED_LABEL,
 } from '../src/client/tree.ts'
+import type {
+  SessionGroupingResolver, TeamGroupInfo, TeamRoleInfo,
+} from '../src/client/tree.ts'
 import { createWorkspaceViewStore } from '../src/client/stores.ts'
 
 const sid = (id: string) => id as SessionId
@@ -30,6 +33,11 @@ const view = (expandedGroups: readonly string[] = [], ungroupedOrder?: readonly 
 })
 const noArchive: readonly SessionId[] = []
 const archived = (...ids: string[]): readonly SessionId[] => ids.map(sid)
+
+/** Team-grouping stub: exact-id classification table, null elsewhere. */
+const teamGrouping = (
+  entries: Record<string, TeamGroupInfo | TeamRoleInfo>,
+): SessionGroupingResolver => id => entries[id] ?? null
 
 describe('deriveGroups', () => {
   it('keeps Host Workspace and sessionIds order without Client recency sorting', () => {
@@ -202,6 +210,101 @@ describe('deriveGroups', () => {
     expect(ownedGroups.find(group => group.key === 'project')!.containsCurrent).toBe(true)
     const looseGroups = deriveGroups({ ...list(owned, loose), current: loose.id }, [ws], noArchive, view())
     expect(looseGroups.find(group => group.key === UNGROUPED_KEY)!.containsCurrent).toBe(true)
+  })
+
+  it('lets a visibility resolver force-show a blank session and force-hide an ordinary one', () => {
+    const blank = { ...summary('blank', 2), blank: true }
+    const plain = summary('plain', 1)
+    const sessions = list(blank, plain)
+    const resolver = (session: SessionSummary): 'visible' | 'hidden' | undefined => {
+      if (session.id === blank.id) return 'visible'
+      if (session.id === plain.id) return 'hidden'
+      return undefined
+    }
+    const groups = deriveGroups(
+      sessions, [workspace('first', ['blank', 'plain'])], noArchive, view(['first']), resolver,
+    )
+    expect(groups[0]!.sessions.map(node => node.id)).toEqual([blank.id])
+  })
+})
+
+describe('deriveGroups team member nesting (09 §5)', () => {
+  const teamInfo = (roles: readonly { role: string; sessionId: string; displayName: string; avatar: string }[]): TeamGroupInfo => ({
+    kind: 'team', title: 'Response Team', status: 'active', messageCount: 3, avatars: [], roles,
+  })
+  const roleInfo = (teamId: string, role: string): TeamRoleInfo => ({
+    kind: 'role', teamId, role, displayName: role, avatar: '🚒',
+  })
+
+  it('keeps the team session as an ordinary group row and nests role members as children', () => {
+    const sessions = list(summary('team', 3), summary('role-a', 2), summary('plain', 1))
+    const grouping = teamGrouping({
+      team: teamInfo([{ role: 'commander', sessionId: 'role-a', displayName: '现场指挥员', avatar: '🚒' }]),
+      'role-a': roleInfo('team', 'commander'),
+    })
+    const groups = deriveGroups(
+      sessions, [workspace('first', ['team', 'role-a', 'plain'])], noArchive, view(['first']), undefined, grouping,
+    )
+    // No top-level team pseudo-group; the team session stays inside its Workspace group.
+    expect(groups.map(group => group.key)).toEqual(['first'])
+    expect(groups[0]!.sessions.map(node => node.id)).toEqual([sid('team'), sid('plain')])
+    const teamNode = groups[0]!.sessions[0]!
+    expect(teamNode.childrenExpanded).toBe(false)
+    expect(teamNode.children?.map(node => node.id)).toEqual([sid('role-a')])
+    expect(teamNode.children?.[0]?.teamRole).toEqual({
+      kind: 'role', role: 'commander', displayName: '现场指挥员', avatar: '🚒',
+    })
+    // Ordinary sessions carry no member fields at all.
+    expect(groups[0]!.sessions[1]!.children).toBeUndefined()
+    expect(groups[0]!.sessions[1]!.childrenExpanded).toBeUndefined()
+  })
+
+  it('marks member rows expanded through the persisted team:<id> expansion key', () => {
+    const sessions = list(summary('team', 3), summary('role-a', 2))
+    const grouping = teamGrouping({
+      team: teamInfo([{ role: 'commander', sessionId: 'role-a', displayName: '现场指挥员', avatar: '🚒' }]),
+      'role-a': roleInfo('team', 'commander'),
+    })
+    const groups = deriveGroups(
+      sessions, [workspace('first', ['team', 'role-a'])], noArchive, view(['first', 'team:team']), undefined, grouping,
+    )
+    expect(groups[0]!.sessions[0]!.childrenExpanded).toBe(true)
+    expect(groups[0]!.sessions[0]!.children?.map(node => node.id)).toEqual([sid('role-a')])
+  })
+
+  it('drops missing or archived members, leaving an empty children list', () => {
+    const sessions = list(summary('team', 3), summary('role-archived', 2))
+    const grouping = teamGrouping({
+      team: teamInfo([
+        { role: 'ghost', sessionId: 'role-missing', displayName: '缺员', avatar: '👻' },
+        { role: 'archived', sessionId: 'role-archived', displayName: '归档员', avatar: '📦' },
+      ]),
+      'role-archived': roleInfo('team', 'archived'),
+    })
+    const groups = deriveGroups(
+      sessions, [workspace('first', ['team'])], archived('role-archived'),
+      view(['first', UNGROUPED_KEY]), undefined, grouping,
+    )
+    // A memberless team row keeps an empty children list (the renderer hides
+    // the expand affordance), and the archived role never surfaces as a stray.
+    expect(groups.map(group => group.key)).toEqual(['first'])
+    expect(groups[0]!.sessions[0]!.children).toEqual([])
+    expect(groups[0]!.sessions[0]!.childrenExpanded).toBe(false)
+  })
+
+  it('excludes stray role sessions from the Ungrouped bucket', () => {
+    const sessions = list(summary('team', 3), summary('role-a', 2), summary('loose', 1))
+    const grouping = teamGrouping({
+      team: teamInfo([{ role: 'commander', sessionId: 'role-a', displayName: '现场指挥员', avatar: '🚒' }]),
+      'role-a': roleInfo('team', 'commander'),
+    })
+    const groups = deriveGroups(
+      sessions, [workspace('first', ['team'])], noArchive, view(['first', UNGROUPED_KEY]), undefined, grouping,
+    )
+    expect(groups.map(group => group.key)).toEqual(['first', UNGROUPED_KEY])
+    expect(groups[1]!.sessions.map(node => node.id)).toEqual([sid('loose')])
+    // The role session still nests under its team row in the Workspace group.
+    expect(groups[0]!.sessions[0]!.children?.map(node => node.id)).toEqual([sid('role-a')])
   })
 })
 
