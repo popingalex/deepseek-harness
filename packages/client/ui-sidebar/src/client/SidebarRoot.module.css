@@ -224,21 +224,6 @@
   line-height: 16px;
 }
 
-.createActions {
-  flex: none;
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
-  gap: 8px;
-  margin: 0 2px 8px;
-}
-
-.createActions .newSession {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-}
-
 /* New Session: 38px bar, 12px radius (figma 133:7634 geometry, squared-off
    corners); collapsed it renders as the rail's plain icon control. */
 .newSession {
@@ -279,20 +264,6 @@
 
 .collapsed .newSession:hover {
   background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.collapsed .createActions {
-  flex-direction: column;
-  align-items: flex-start;
-  width: 36px;
-  gap: 0;
-  margin: 0;
-}
-
-.collapsed .createActions .newSession {
-  flex: none;
-  width: 36px;
-  margin: 0 0 12px;
 }
 
 .newSessionLabel {

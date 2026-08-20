@@ -174,21 +174,18 @@ export function SidebarRoot({
         </Tooltip>
       </div>
 
-      <div className={css.createActions} data-testid="sidebar-create-actions">
-        {/* Expanded, the button carries its own label — tooltip only on the rail. */}
-        <Tooltip label={t('session.new.label')} delayMs={500} disabled={wide}>
-          <button
-            type="button"
-            className={css.newSession}
-            aria-label={t('session.new.label')}
-            onClick={() => { startSession() }}
-          >
-            <IconNewChatOutline16 size={wide ? 14 : 18} />
-            {wide && <span className={clsx(css.newSessionLabel, css.wide)}>{t('session.new')}</span>}
-          </button>
-        </Tooltip>
-        {renderSlot('sidebar.create.action', { wide, actionClassName: clsx(css.newSession) })}
-      </div>
+      {/* Expanded, the button carries its own label — tooltip only on the rail. */}
+      <Tooltip label={t('session.new.label')} delayMs={500} disabled={wide}>
+        <button
+          type="button"
+          className={css.newSession}
+          aria-label={t('session.new.label')}
+          onClick={() => { startSession() }}
+        >
+          <IconNewChatOutline16 size={wide ? 14 : 18} />
+          {wide && <span className={clsx(css.newSessionLabel, css.wide)}>{t('session.new')}</span>}
+        </button>
+      </Tooltip>
 
       {/* The browsing region fills the column between the controls and the
           foot in both states; its rail icon column rides the same slot. */}
