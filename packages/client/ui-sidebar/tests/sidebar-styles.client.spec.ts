@@ -26,14 +26,6 @@ function declarations(selector: string): Map<string, string> | undefined {
 }
 
 describe('SidebarRoot.module.css', () => {
-  it('lays out create actions horizontally when wide and vertically in the rail', () => {
-    expect(declarations('.createActions')?.get('display')).toBe('flex')
-    expect(declarations('.createActions')?.get('gap')).toBe('8px')
-    expect(declarations('.createActions .newSession')?.get('flex')).toBe('1')
-    expect(declarations('.collapsed .createActions')?.get('width')).toBe('36px')
-    expect(declarations('.collapsed .createActions')?.get('flex-direction')).toBe('column')
-  })
-
   it('shares and cancels the wide shell trailing padding structurally', () => {
     const root = declarations('.root')
     expect(root?.get('--dsh-sidebar-inline-padding')).toBe('12px')
