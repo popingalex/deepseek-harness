@@ -96,6 +96,18 @@ export abstract class SessionPersistence extends Service {
   abstract locate(meta: SessionHeader): SessionLocation | undefined
 
   /**
+   * Forget a session's durable state and mark it eligible for a fresh
+   * same-id lifecycle (maintenance reset). The default rejects: backends with
+   * per-session artifacts that support in-place replacement override it.
+   * Callers are responsible for removing the physical artifact before a
+   * replacement session is announced.
+   * @param _id - the persisted session to forget.
+   */
+  async reset(_id: SessionId): Promise<void> {
+    throw new Error('this session persistence backend does not support reset')
+  }
+
+  /**
    * Whether this backend exposes one verbatim raw artifact per session.
    * A backend that declares `true` must override {@link readRaw}.
    */
