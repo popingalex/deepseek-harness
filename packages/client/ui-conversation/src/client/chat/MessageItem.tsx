@@ -301,37 +301,6 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
       text,
       nodeKey: node.key,
     } satisfies MessageFooterOwnerProps, { fallback: null })
-  // Emergency Harness team projection: user/message carries an ehTeam source
-  // (actor/kind/refs). Render an actor head above the native bubble and keep
-  // the footer capsule slot for refs (08-replan §6/§16).
-  type EhTeamSource = { ehTeam?: { displayName?: string; roleName?: string; avatar?: { icon?: string }; kind?: string } } | undefined
-  const eh = (data.source as EhTeamSource)?.ehTeam
-  if (eh !== undefined) {
-    return (
-      <div className={css.ehActorRow} data-eh-native-actor={eh.kind ?? 'message'}>
-        <div className={css.ehActorHead}>
-          <span className={css.ehActorAvatar} aria-hidden>{eh.avatar?.icon ?? '🤖'}</span>
-          <span className={css.ehActorName}>{eh.displayName ?? ''}{eh.roleName ? ` · ${eh.roleName}` : ''}</span>
-          {eh.kind ? <span className={css.ehActorKind}>{eh.kind}</span> : null}
-        </div>
-        <UserStyleBubble
-          content={data.content}
-          renderMessageImages={renderMessageImages}
-          t={t}
-          actions={text => (
-            <MessageIconActions
-              text={text}
-              time={data.time}
-              clock="start"
-              className={css.actions}
-              t={t}
-            />
-          )}
-          footer={footer}
-        />
-      </div>
-    )
-  }
   return (
     <UserStyleBubble
       content={data.content}
