@@ -44,6 +44,16 @@ export class SessionPreparations<Source extends PreparedSource, CommitState> {
   }
 
   /**
+   * Forget an unpublished identity (maintenance reset). Pending readers still
+   * settle through their own entry; the pool just stops serving this id.
+   * @param id - session identity to forget.
+   */
+  forget(id: SessionId): void {
+    const entry = this.entries.get(id)
+    if (entry !== undefined) this.remove(entry)
+  }
+
+  /**
    * Observe one prepared source, sharing an in-flight read for the same id.
    * @param id - session identity.
    * @param load - cold loader used when no entry exists.
