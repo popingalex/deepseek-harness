@@ -844,6 +844,25 @@ export class SessionStore extends Service {
   }
 
   /**
+   * Replace a live session's log with a fresh same-id lifecycle in place:
+   * detach the current entry (emitting `session/disposed`), then create the
+   * replacement (emitting `session/created`). Maintenance flows that rebuild a
+   * session's content call this after clearing durable state (see
+   * `ctx.sessionPersistence.reset`) so the replacement starts from a clean log
+   * instead of appending to the old one.
+   * @param id - the live session id to replace; must currently exist.
+   * @param options - seed events and/or creation metadata for the replacement.
+   * @returns the replacement session, already entered and announced.
+   * @throws if no live session has `id`, or if the replacement is invalid.
+   */
+  replace(id: SessionId, options?: CreateSessionOptions): Session {
+    const existing = this.store.get(id)
+    if (existing === undefined) throw new Error(`session "${id}" does not exist`)
+    existing.detach()
+    return this.create(id, options)
+  }
+
+  /**
    * Build a session WITHOUT entering it into the store — validate the id/cwd and
    * construct the {@link Session} (with its immutable {@link SessionHeader}).
    * Pairs with {@link enter} + {@link announce}: a caller that owns a composite

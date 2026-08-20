@@ -657,6 +657,21 @@ export class PersistenceCoordinator<TornMarker = unknown> {
     this.states.set(meta.id, { meta, cursor: 0, materialized: false })
   }
 
+  /**
+   * Forget one session's durable in-memory state (maintenance reset). Callers
+   * must also remove the backend artifact (e.g. via the backend's
+   * `locate`+unlink) before a replacement session is created; this method only
+   * clears the coordinator's tracked/prepared state so the replacement's
+   * `session/created` path registers a genuinely new lifecycle.
+   * @param id - the session id to forget.
+   */
+  async reset(id: SessionId): Promise<void> {
+    return this.serialize(id, () => {
+      this.states.delete(id)
+      this.preparations.forget(id)
+    })
+  }
+
   // `async` so synchronous materialization failures below reject (not throw) per
   // the Promise<void> contract — callers use `await expect(...).rejects`.
   /**

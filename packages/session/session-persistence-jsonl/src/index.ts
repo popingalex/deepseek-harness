@@ -173,6 +173,11 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
     return { kind: 'jsonl', path: logPath(this.root, meta.cwd, meta.id, this.compression) }
   }
 
+  /** Forget in-memory persistence state; the host removes the artifact file. */
+  override async reset(id: SessionId): Promise<void> {
+    return this.coordinator.reset(id)
+  }
+
   create(meta: SessionHeader): Promise<void> {
     return this.coordinator.create(meta)
   }
