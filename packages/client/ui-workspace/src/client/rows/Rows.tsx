@@ -15,8 +15,7 @@ import {
 import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { abbreviateHomePath } from '@deepseek-ai/dsh-client-runtime/client'
 import type { WorkspaceBrowserProps } from '../contract/slots.ts'
-import type { GroupNode, SearchResultNode, SessionNode } from '../tree.ts'
-import type { EmergencyParticipantRow, EmergencySessionRowMetadata } from '../emergency-session-rows.ts'
+import type { GroupNode, SearchResultNode, SessionNode, TeamGroupInfo } from '../tree.ts'
 import { relativeTime } from '../tree.ts'
 import css from './Rows.module.css'
 
@@ -281,49 +280,26 @@ function SessionStatusDots({ statuses }: { statuses: readonly [SessionStatus, ..
   )
 }
 
-function EmergencyMembers({ sessionId, participants }: {
+function GroupMembers({ sessionId, members }: {
   sessionId: string
-  participants: readonly EmergencyParticipantRow[]
+  members: readonly NonNullable<TeamGroupInfo['members']>[number][]
 }) {
   return (
-    <div className={css.memberList} data-eh-session-members={sessionId}>
-      {participants.map(participant => (
-        <div className={css.memberRow} data-eh-session-member key={`${participant.displayName}:${participant.roleName}`}>
+    <div className={css.memberList} data-session-members={sessionId}>
+      {members.map(member => (
+        <div className={css.memberRow} data-session-member key={`${member.displayName}:${member.roleName}`}>
           <span className={css.memberIdentity}>
-            <strong>{participant.displayName}</strong>
-            <span>{participant.roleName}</span>
+            <strong>{member.displayName}</strong>
+            <span>{member.roleName}</span>
           </span>
-          <span className={css.memberStatus}>{participant.status}</span>
+          <span className={css.memberStatus}>{member.status}</span>
         </div>
       ))}
     </div>
   )
 }
 
-/** Event/team session badge: lucide `calendar` glyph at 18px. */
-function EventCalendarIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-      data-eh-event-calendar-icon
-    >
-      <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path
-        d="M16 2v4M8 2v4M3 10h18"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-/** Team member (role session) badge: lucide `user` glyph at 16px. */
+/** Group-member (role session) badge: lucide `user` glyph at 16px. */
 function MemberUserIcon() {
   return (
     <svg
@@ -332,7 +308,7 @@ function MemberUserIcon() {
       viewBox="0 0 24 24"
       fill="none"
       aria-hidden="true"
-      data-eh-member-user-icon
+      data-session-role-icon
     >
       <path
         d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"
@@ -346,30 +322,17 @@ function MemberUserIcon() {
   )
 }
 
-function SessionKindIcon({ metadata }: { metadata: EmergencySessionRowMetadata }) {
-  switch (metadata.kind) {
-    case 'team': return <EventCalendarIcon />
-    case 'event': return <EventCalendarIcon />
-    case 'standard': return <IconNewChatOutline16 />
-    /* v8 ignore next -- closed EmergencySessionRowMetadata union */
-    default: return assertNever(metadata)
-  }
+/** Group glyph from the grouping provider; plain rows fall back to the new-chat rune. */
+function SessionKindGlyph({ groupInfo }: { groupInfo: TeamGroupInfo | undefined }) {
+  const icon = groupInfo?.icon
+  if (icon === undefined || icon === '') return <IconNewChatOutline16 />
+  return <span aria-hidden="true">{icon}</span>
 }
 
-function sessionKindLabel(metadata: EmergencySessionRowMetadata): string {
-  switch (metadata.kind) {
-    case 'team': return '应急团队会话'
-    case 'event': return '事件会话'
-    case 'standard': return '单人会话'
-    /* v8 ignore next -- closed EmergencySessionRowMetadata union */
-    default: return assertNever(metadata)
-  }
-}
-
-function SessionHoverContent({ node, now, emergencyMetadata, t }: {
+function SessionHoverContent({ node, now, groupInfo, t }: {
   node: SessionNode
   now: number
-  emergencyMetadata: EmergencySessionRowMetadata | undefined
+  groupInfo: TeamGroupInfo | undefined
   t: RowTranslate
 }) {
   const statuses = sessionStatuses(node, t)
@@ -385,8 +348,8 @@ function SessionHoverContent({ node, now, emergencyMetadata, t }: {
           <span>{status.label}</span>
         </div>
       ))}
-      {(emergencyMetadata?.kind === 'team' || emergencyMetadata?.kind === 'event') && (
-        <EmergencyMembers sessionId={node.id} participants={emergencyMetadata.participants} />
+      {groupInfo?.members !== undefined && groupInfo.members.length > 0 && (
+        <GroupMembers sessionId={node.id} members={groupInfo.members} />
       )}
     </div>
   )
@@ -455,7 +418,7 @@ export function SearchResultItem({ result, currentId, onOpen, t }: {
  */
 export function SessionNodeItem({
   node, currentId, now, onOpen, onRename, onFork, onArchive, drag, flat = false,
-  emergencyMetadata, expand, renderSlot, t,
+  groupInfo, groupingActive, expand, renderSlot, t,
 }: {
   node: SessionNode
   currentId: string | undefined
@@ -471,7 +434,10 @@ export function SessionNodeItem({
   drag?: RowDragProps | undefined
   /** The row is rendered without a parent Workspace header. */
   flat?: boolean | undefined
-  emergencyMetadata?: EmergencySessionRowMetadata | undefined
+  /** Grouping-provider classification for this row, when a grouping service is present. */
+  groupInfo?: TeamGroupInfo | undefined
+  /** True while a grouping service is composed: plain rows keep their kind seat. */
+  groupingActive?: boolean | undefined
   /** Team member-list toggle; absent when the session has no members to show. */
   expand?: { expanded: boolean; onToggle: () => void } | undefined
   /** Optional renderer for the `sidebar.session.badge` child slot (lead marker before the title). */
@@ -479,19 +445,17 @@ export function SessionNodeItem({
   t: RowTranslate
 }) {
   const row = node
-  // EH event/team rows keep a real label even while blank: the generic
-  // "New Session" placeholder would otherwise mislabel an event draft as a
-  // plain new session. Ordinary rows (kind: 'standard') keep the native
-  // blank "New Session" placeholder. Use the emergency kind label until the
-  // session gains its own title (blank DSH sessions refuse rename until
-  // first content).
-  const isEmergencyRow = emergencyMetadata?.kind === 'event' || emergencyMetadata?.kind === 'team'
+  // Grouped rows keep a real label even while blank: the generic
+  // "New Session" placeholder would otherwise mislabel a grouped draft (e.g.
+  // an unwritten event session) as a plain new session. The label comes from
+  // the grouping provider; plain rows keep the native blank placeholder.
+  const isGroupedRow = groupInfo !== undefined
   const title = node.teamRole?.kind === 'feed'
     ? '🌐 团队公共流'
     : node.teamRole?.kind === 'role'
       ? node.teamRole.displayName
-      : (node.blank && isEmergencyRow)
-        ? (emergencyMetadata.kind === 'event' ? '事件处置' : '应急团队会话')
+      : (node.blank && isGroupedRow && groupInfo.label !== undefined)
+        ? groupInfo.label
         : displayTitle(node, t)
   const selected = node.id === currentId
   const statuses = sessionStatuses(node, t)
@@ -499,10 +463,12 @@ export function SessionNodeItem({
   const showStatus = primaryStatus.state !== 'done' || row.completed
   const [menuOpen, setMenuOpen] = useState(false)
   const [focusedTeamPanel, setFocusedTeamPanel] = useState<{ left: number; top: number } | null>(null)
-  const teamParticipants = emergencyMetadata?.kind === 'team' || emergencyMetadata?.kind === 'event'
-    ? emergencyMetadata.participants
-    : undefined
-  const kindLabel = emergencyMetadata === undefined ? '' : sessionKindLabel(emergencyMetadata)
+  const groupMembers = groupInfo?.members
+  const kindLabel = groupInfo?.label ?? ''
+  // While a grouping service is composed every row keeps its kind seat
+  // (grouped rows carry the group kind, plain rows read as 'standard');
+  // without one the native seatless row look is preserved.
+  const kindSeat = groupingActive === true ? (groupInfo?.kind ?? 'standard') : undefined
   // Archive hides the row through the registry-global archive set and never
   // touches the session log, so it is not styled as destructive and needs no
   // confirmation dialog.
@@ -529,13 +495,13 @@ export function SessionNodeItem({
       )}
       role="treeitem"
       aria-selected={selected}
-      aria-label={emergencyMetadata === undefined
+      aria-label={groupInfo === undefined
         ? undefined
-        : `${title}，${kindLabel}${teamParticipants === undefined ? '' : `，${teamParticipants.length} 名成员`}`}
-      tabIndex={teamParticipants === undefined ? undefined : 0}
+        : `${title}，${kindLabel}${groupMembers === undefined ? '' : `，${groupMembers.length} 名成员`}`}
+      tabIndex={groupMembers === undefined ? undefined : 0}
       onClick={() => { onOpen(node.id) }}
       onFocus={(event) => {
-        if (teamParticipants === undefined) return
+        if (groupMembers === undefined || groupMembers.length === 0) return
         const rect = event.currentTarget.getBoundingClientRect()
         const left = rect.right + 252 <= window.innerWidth ? rect.right + 8 : Math.max(8, window.innerWidth - 252)
         setFocusedTeamPanel({ left, top: Math.max(8, Math.min(rect.top, window.innerHeight - 200)) })
@@ -575,11 +541,11 @@ export function SessionNodeItem({
         </span>
       )}
       {node.teamRole?.kind === 'role' ? (
-        <span className={css.sessionKind} data-eh-session-badge="role" aria-hidden="true">
+        <span className={css.sessionKind} data-session-kind="role" aria-hidden="true">
           <MemberUserIcon />
         </span>
-      ) : (emergencyMetadata !== undefined || expand !== undefined) && (
-        <span className={css.sessionKind} {...(emergencyMetadata !== undefined ? { 'data-eh-session-badge': emergencyMetadata.kind } : {})}>
+      ) : (kindSeat !== undefined || expand !== undefined) && (
+        <span className={css.sessionKind} {...(kindSeat !== undefined ? { 'data-session-kind': kindSeat } : {})}>
           <span
             aria-hidden="true"
             className={clsx(
@@ -588,7 +554,7 @@ export function SessionNodeItem({
               expand?.expanded === true && css.kindGlyphHidden,
             )}
           >
-            {emergencyMetadata !== undefined && <SessionKindIcon metadata={emergencyMetadata} />}
+            {kindSeat !== undefined && <SessionKindGlyph groupInfo={groupInfo} />}
           </span>
           {/* The type-glyph seat doubles as the member-list toggle: hover (or
               the expanded state) swaps in the chevron, same pattern as the
@@ -608,13 +574,13 @@ export function SessionNodeItem({
       )}
       {renderSlot !== undefined && renderSlot('sidebar.session.badge', { sessionId: node.id, title })}
       <span className={css.title}>{title}</span>
-      {teamParticipants !== undefined && (
+      {groupMembers !== undefined && groupMembers.length > 0 && (
         <span
           className={css.memberCount}
-          data-eh-session-member-count={teamParticipants.length}
+          data-session-member-count={groupMembers.length}
           aria-hidden="true"
         >
-          {teamParticipants.length}
+          {groupMembers.length}
         </span>
       )}
       {/* A blank New Session row is a provisional placeholder: nothing has
@@ -655,20 +621,20 @@ export function SessionNodeItem({
     <>
       <HoverCard
         anchor={ownRow}
-        content={<SessionHoverContent node={node} now={now} emergencyMetadata={emergencyMetadata} t={t} />}
+        content={<SessionHoverContent node={node} now={now} groupInfo={groupInfo} t={t} />}
         disabled={menuOpen || drag?.active === true || focusedTeamPanel !== null}
         copyText={row.blank ? undefined : row.title}
         copyLabel={t('copy')}
         copiedLabel={t('hover.copied')}
       />
-      {focusedTeamPanel !== null && teamParticipants !== undefined && (
+      {focusedTeamPanel !== null && groupMembers !== undefined && groupMembers.length > 0 && (
         <div
           className={css.focusCard}
           style={focusedTeamPanel}
           role="tooltip"
-          data-eh-session-members-focus={node.id}
+          data-session-members-focus={node.id}
         >
-          <EmergencyMembers sessionId={node.id} participants={teamParticipants} />
+          <GroupMembers sessionId={node.id} members={groupMembers} />
         </div>
       )}
     </>

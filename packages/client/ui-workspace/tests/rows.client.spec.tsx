@@ -6,8 +6,7 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { RowDragProps } from '../src/client/rows/Rows.tsx'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from '../src/client/rows/Rows.tsx'
-import type { GroupNode, SearchResultNode, SessionNode } from '../src/client/tree.ts'
-import type { EmergencySessionRowMetadata } from '../src/client/emergency-session-rows.ts'
+import type { GroupNode, SearchResultNode, SessionNode, TeamGroupInfo } from '../src/client/tree.ts'
 import { zh } from '../src/client/locales.ts'
 
 afterEach(cleanup)
@@ -57,29 +56,37 @@ function fireDrag(row: HTMLElement, kind: 'dragOver' | 'drop', clientY: number):
   fireEvent(row, event)
 }
 
+
+function group(kind: 'team' | 'event', members: { displayName: string; roleName: string; status: string }[] = []): TeamGroupInfo {
+  return {
+    kind, title: 'Response Team', status: 'active',
+    label: kind === 'event' ? '事件会话' : '应急团队会话',
+    icon: kind === 'event' ? '📅' : '🛡',
+    members,
+    avatars: [],
+    roles: [],
+  }
+}
+
 describe('workspace browser rows', () => {
   it('marks standard and emergency-team rows without rendering member avatars', () => {
     const node: SessionNode = {
       id: sid('team'), title: 'Response Team', blank: false, running: false,
       runningSubagentCount: 0, completed: false, updatedAt: 0,
     }
-    const team: EmergencySessionRowMetadata = {
-      kind: 'team',
-      participants: [
-        { displayName: '现场指挥员', roleName: '指挥协调', status: 'online' },
-        { displayName: '情报研判员', roleName: '情报研判', status: 'working' },
-      ],
-    }
+    const team = group('team', [
+      { displayName: '现场指挥员', roleName: '指挥协调', status: 'online' },
+      { displayName: '情报研判员', roleName: '情报研判', status: 'working' },
+    ])
     const view = render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
-      onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} emergencyMetadata={team} t={t} />)
-    expect(screen.getByRole('treeitem').querySelector('[data-eh-session-badge="team"]')).toBeTruthy()
-    expect(screen.getByText('2').getAttribute('data-eh-session-member-count')).toBe('2')
+      onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} groupInfo={team} groupingActive t={t} />)
+    expect(screen.getByRole('treeitem').querySelector('[data-session-kind="team"]')).toBeTruthy()
+    expect(screen.getByText('2').getAttribute('data-session-member-count')).toBe('2')
     expect(view.container.querySelector('img')).toBeNull()
 
     view.rerender(<SessionNodeItem node={{ ...node, id: sid('standard') }} currentId={undefined} now={0}
-      onOpen={vi.fn()} onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()}
-      emergencyMetadata={{ kind: 'standard' }} t={t} />)
-    expect(screen.getByRole('treeitem').querySelector('[data-eh-session-badge="standard"]')).toBeTruthy()
+      onOpen={vi.fn()} onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} groupingActive t={t} />)
+    expect(screen.getByRole('treeitem').querySelector('[data-session-kind="standard"]')).toBeTruthy()
   })
 
   it('renders a local calendar svg for event sessions in the session-kind slot', () => {
@@ -89,10 +96,10 @@ describe('workspace browser rows', () => {
     }
     const view = render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
       onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()}
-      emergencyMetadata={{ kind: 'event', participants: [] }} t={t} />)
+      groupInfo={group('event')} groupingActive t={t} />)
 
-    const badge = view.container.querySelector('[data-eh-session-badge="event"]')
-    expect(badge?.querySelector('svg[data-eh-event-calendar-icon]')).toBeTruthy()
+    const badge = view.container.querySelector('[data-session-kind="event"]')
+    expect(badge?.textContent).toContain('📅')
   })
 
   it('shows emergency-team member details on hover and keyboard focus', () => {
@@ -102,22 +109,19 @@ describe('workspace browser rows', () => {
         id: sid('team'), title: 'Response Team', blank: false, running: false,
         runningSubagentCount: 0, completed: false, updatedAt: 0,
       }
-      const metadata: EmergencySessionRowMetadata = {
-        kind: 'team',
-        participants: [{ displayName: '现场指挥员', roleName: '指挥协调', status: 'online' }],
-      }
+      const metadata = group('team', [{ displayName: '现场指挥员', roleName: '指挥协调', status: 'online' }])
       render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
-        onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} emergencyMetadata={metadata} t={t} />)
+        onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} groupInfo={metadata} groupingActive t={t} />)
       const row = screen.getByRole('treeitem')
       fireEvent.pointerEnter(row.parentElement as HTMLElement)
       act(() => { vi.advanceTimersByTime(500) })
-      expect(document.querySelector('[data-eh-session-members="team"]')?.textContent).toContain('现场指挥员')
+      expect(document.querySelector('[data-session-members="team"]')?.textContent).toContain('现场指挥员')
       fireEvent.pointerLeave(row.parentElement as HTMLElement)
       fireEvent.focus(row)
-      expect(document.querySelector('[data-eh-session-members-focus="team"]')?.textContent).toContain('指挥协调')
-      expect(document.querySelector('[data-eh-session-members-focus="team"]')?.textContent).toContain('online')
+      expect(document.querySelector('[data-session-members-focus="team"]')?.textContent).toContain('指挥协调')
+      expect(document.querySelector('[data-session-members-focus="team"]')?.textContent).toContain('online')
       fireEvent.blur(row)
-      expect(document.querySelector('[data-eh-session-members-focus="team"]')).toBeNull()
+      expect(document.querySelector('[data-session-members-focus="team"]')).toBeNull()
     } finally {
       vi.useRealTimers()
     }
@@ -128,12 +132,9 @@ describe('workspace browser rows', () => {
       id: sid('team'), title: 'Response Team', blank: false, running: false,
       runningSubagentCount: 0, completed: false, updatedAt: 0,
     }
-    const metadata: EmergencySessionRowMetadata = {
-      kind: 'team',
-      participants: [{ displayName: '现场指挥员', roleName: '指挥协调', status: 'online' }],
-    }
+    const metadata = group('team', [{ displayName: '现场指挥员', roleName: '指挥协调', status: 'online' }])
     render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
-      onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} emergencyMetadata={metadata} t={t} />)
+      onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} groupInfo={metadata} groupingActive t={t} />)
     const row = screen.getByRole('treeitem')
     // Right edge at the jsdom viewport width (1024): the panel no longer fits on the right.
     row.getBoundingClientRect = () => ({
@@ -141,7 +142,7 @@ describe('workspace browser rows', () => {
       x: 900, y: 100, toJSON: () => ({}),
     })
     fireEvent.focus(row)
-    expect(document.querySelector('[data-eh-session-members-focus="team"]')).toBeTruthy()
+    expect(document.querySelector('[data-session-members-focus="team"]')).toBeTruthy()
   })
 
   it('ignores keyboard focus on rows without emergency participants', () => {
@@ -152,7 +153,7 @@ describe('workspace browser rows', () => {
     render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
       onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
     fireEvent.focus(screen.getByRole('treeitem'))
-    expect(document.querySelector('[data-eh-session-members-focus]')).toBeNull()
+    expect(document.querySelector('[data-session-members-focus]')).toBeNull()
   })
 
   it('renders team feed and role titles from the teamRole classification', () => {
@@ -175,8 +176,8 @@ describe('workspace browser rows', () => {
     // Member rows carry one plain user icon (no emoji in the title, no
     // second session-kind badge).
     expect(screen.getByText('现场指挥员')).toBeTruthy()
-    expect(view.container.querySelector('[data-eh-session-badge="role"] [data-eh-member-user-icon]')).toBeTruthy()
-    expect(view.container.querySelector('[data-eh-session-badge="standard"]')).toBeNull()
+    expect(view.container.querySelector('[data-session-kind="role"] [data-session-role-icon]')).toBeTruthy()
+    expect(view.container.querySelector('[data-session-kind="standard"]')).toBeNull()
   })
 
   it('omits only an empty leading status slot in the hierarchy-free flat list', () => {
