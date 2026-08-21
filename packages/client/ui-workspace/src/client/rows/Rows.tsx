@@ -299,6 +299,29 @@ function GroupMembers({ sessionId, members }: {
   )
 }
 
+/** Grouped-session badge: lucide `calendar` glyph at 18px (event rune). */
+function SessionCalendarIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      data-session-kind-icon
+    >
+      <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M16 2v4M8 2v4M3 10h18"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 /** Group-member (role session) badge: lucide `user` glyph at 16px. */
 function MemberUserIcon() {
   return (
@@ -322,11 +345,23 @@ function MemberUserIcon() {
   )
 }
 
-/** Group glyph from the grouping provider; plain rows fall back to the new-chat rune. */
+/** Group glyph keys the grouping provider may request; unknown keys fall back to the new-chat rune. */
+const GROUP_GLYPHS = {
+  /** An event-scoped conversation: the calendar is the conventional "event" rune. */
+  calendar: SessionCalendarIcon,
+} as const
+
+/**
+ * Group glyph from the grouping provider (a semantic key, not a literal
+ * glyph): the browser renders its own line-icon set so provider-driven rows
+ * stay in the sidebar's stroke-icon language; plain rows fall back to the
+ * new-chat rune.
+ */
 function SessionKindGlyph({ groupInfo }: { groupInfo: TeamGroupInfo | undefined }) {
-  const icon = groupInfo?.icon
-  if (icon === undefined || icon === '') return <IconNewChatOutline16 />
-  return <span aria-hidden="true">{icon}</span>
+  const key = groupInfo?.icon
+  const Glyph = key === undefined ? undefined : GROUP_GLYPHS[key as keyof typeof GROUP_GLYPHS]
+  if (Glyph === undefined) return <IconNewChatOutline16 />
+  return <Glyph />
 }
 
 function SessionHoverContent({ node, now, groupInfo, t }: {

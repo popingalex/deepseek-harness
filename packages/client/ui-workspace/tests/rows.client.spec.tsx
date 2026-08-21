@@ -61,7 +61,7 @@ function group(kind: 'team' | 'event', members: { displayName: string; roleName:
   return {
     kind, title: 'Response Team', status: 'active',
     label: kind === 'event' ? '事件会话' : '应急团队会话',
-    icon: kind === 'event' ? '📅' : '🛡',
+    icon: 'calendar',
     members,
     avatars: [],
     roles: [],
@@ -99,7 +99,7 @@ describe('workspace browser rows', () => {
       groupInfo={group('event')} groupingActive t={t} />)
 
     const badge = view.container.querySelector('[data-session-kind="event"]')
-    expect(badge?.textContent).toContain('📅')
+    expect(badge?.querySelector('svg[data-session-kind-icon]')).toBeTruthy()
   })
 
   it('shows emergency-team member details on hover and keyboard focus', () => {

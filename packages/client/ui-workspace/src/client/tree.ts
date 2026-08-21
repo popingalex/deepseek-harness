@@ -141,7 +141,7 @@ export interface TeamGroupInfo {
   title: string
   status: string
   messageCount?: number
-  /** Group glyph (an emoji/text rune) for the session-kind seat. */
+  /** Group glyph key for the session-kind seat (e.g. 'calendar'); the browser owns the icon set. */
   icon?: string
   /** Group kind label for blank-row titles and screen-reader descriptions. */
   label?: string
