@@ -19,8 +19,6 @@ import type {
   SessionId, SessionListState, SessionSearchResultItem, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import type { WorkspaceBrowserProps } from './contract/slots.ts'
-import { useEmergencySessionRows } from './emergency-session-rows.ts'
-import type { EmergencySessionRowMetadata, EmergencySessionRowsState } from './emergency-session-rows.ts'
 import type { SessionNode, SessionOrderBy, SessionVisibilityResolver } from './tree.ts'
 import { deriveFlat, deriveGroups, deriveSearchResults, UNGROUPED_KEY } from './tree.ts'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './rows/Rows.tsx'
@@ -39,7 +37,6 @@ const SEARCH_DEBOUNCE_MS = 250
 const SEARCH_QUERY_MAX_CODE_UNITS = 500
 /** Session rows visible per Workspace before the local overflow control. */
 const COLLAPSED_SESSION_LIMIT = 5
-const STANDARD_SESSION_METADATA = { kind: 'standard' } as const satisfies EmergencySessionRowMetadata
 
 /** Keep controlled input and RPC payload inside the session.search wire contract. */
 function sanitizeSearchQuery(value: string): string {
@@ -249,11 +246,19 @@ type SessionTreeProps = Pick<
   onSessionArchive: (sessionId: SessionNode['id']) => void
   /** Session order behavior: fixed after edits, or additionally promoted by user activity. */
   orderBy: SessionOrderBy
-  emergencySessions: EmergencySessionRowsState
-  /** Optional plugin-provided visibility resolver (Emergency Harness team sessions). */
+  /** Optional plugin-provided visibility resolver (e.g. domain team sessions). */
   sessionVisibility?: SessionVisibilityResolver | undefined
   /** Session-row badge child renderer (see WorkspaceBrowserProps). */
   renderSlot?: WorkspaceBrowserProps['renderSlot'] | undefined
+}
+
+/** Team/event classification for one row, narrowed out of the grouping union. */
+function teamInfoOf(
+  sessionGrouping: ((sessionId: string) => import('./tree.ts').TeamGroupInfo | import('./tree.ts').TeamRoleInfo | null) | undefined,
+  id: string,
+): import('./tree.ts').TeamGroupInfo | undefined {
+  const info = sessionGrouping?.(id)
+  return info !== null && info !== undefined && info.kind !== 'role' ? info : undefined
 }
 
 /** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
@@ -264,7 +269,6 @@ function SessionTree({
   groupExpansion, setGroupExpanded,
   sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, home, t,
   sessionVisibility, sessionGrouping, sessionListProjection, renderSlot,
-  emergencySessions,
 }: SessionTreeProps) {
   const list = useSessions(s => s)
   const current = list.current
@@ -539,9 +543,8 @@ function SessionTree({
                       onRename={onSessionRename}
                       onFork={forkSession}
                       onArchive={onSessionArchive}
-                      emergencyMetadata={emergencySessions.ready
-                        ? emergencySessions.bySession.get(node.id) ?? STANDARD_SESSION_METADATA
-                        : undefined}
+                      groupInfo={teamInfoOf(sessionGrouping, node.id as string)}
+                      groupingActive={sessionGrouping !== undefined}
                       expand={memberRows.length > 0
                         ? {
                           // Team member expansion shares the persisted group
@@ -566,9 +569,8 @@ function SessionTree({
                             onRename={onSessionRename}
                             onFork={forkSession}
                             onArchive={onSessionArchive}
-                            emergencyMetadata={emergencySessions.ready
-                              ? emergencySessions.bySession.get(child.id) ?? STANDARD_SESSION_METADATA
-                              : undefined}
+                            groupInfo={teamInfoOf(sessionGrouping, child.id as string)}
+                            groupingActive={sessionGrouping !== undefined}
                             renderSlot={renderSlot}
                             t={t}
                           />
@@ -602,8 +604,8 @@ function SessionTree({
 /** The flat "In one list" body: every session is one draggable top-level row. */
 function FlatList({
   useSessions, open, forkSession, onSessionRename, onSessionArchive, archivedSessionIds,
-  orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, sessionVisibility, renderSlot, t,
-  emergencySessions,
+  orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
+  sessionVisibility, sessionGrouping, renderSlot, t,
 }: Pick<
   SessionTreeProps,  | 'useSessions'
   | 'open'
@@ -620,7 +622,6 @@ function FlatList({
   | 'sessionGrouping'
   | 'renderSlot'
   | 't'
-  | 'emergencySessions'
 >) {
   const list = useSessions(s => s)
   const baseRows = useMemo(
@@ -693,9 +694,8 @@ function FlatList({
               onRename={onSessionRename}
               onFork={forkSession}
               onArchive={onSessionArchive}
-              emergencyMetadata={emergencySessions.ready
-                ? emergencySessions.bySession.get(node.id) ?? STANDARD_SESSION_METADATA
-                : undefined}
+              groupInfo={teamInfoOf(sessionGrouping, node.id as string)}
+              groupingActive={sessionGrouping !== undefined}
               flat
               renderSlot={renderSlot}
               drag={{
@@ -834,7 +834,6 @@ export function WorkspaceBrowser({
   const workspaces = useWorkspaces(state => state.items)
   const workspacePhase = useWorkspaces(state => state.phase)
   const archivedSessionIds = useWorkspaces(state => state.archivedSessionIds)
-  const emergencySessions = useEmergencySessionRows()
   // Live occupancy of this surface's directory-flow hole (the same source the
   // flow reads): a composition without a picking affordance can add nothing.
   const directoryFlowAvailable = useDirectoryFlow(occupied => occupied)
@@ -1231,7 +1230,7 @@ export function WorkspaceBrowser({
                 sessionUpdatedAtByAccount={sessionUpdatedAtByAccount}
                 syncSessionOrderAccount={actions.syncSessionOrderAccount}
                 setSessionOrder={actions.setSessionOrder}
-                emergencySessions={emergencySessions}
+                sessionGrouping={sessionGrouping}
                 sessionVisibility={sessionVisibility}
                 renderSlot={renderSlot}
                 t={t}
@@ -1257,7 +1256,6 @@ export function WorkspaceBrowser({
                 insertSessionBefore={insertSessionBefore}
                 orderBy={orderBy}
                 home={home}
-                emergencySessions={emergencySessions}
                 sessionVisibility={sessionVisibility}
                 sessionGrouping={sessionGrouping}
                 sessionListProjection={sessionListProjection}

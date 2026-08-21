@@ -130,12 +130,23 @@ function byRecency(a: SessionSummary, b: SessionSummary): number {
  */
 export type SessionVisibilityResolver = (session: SessionSummary) => 'visible' | 'hidden' | undefined
 
-/** One team classification (09 §5): the team session carries its role members as nested rows. */
+/**
+ * One grouped-session classification (09 §5): the group session carries its
+ * role members as nested rows. All display vocabulary (label, glyph, member
+ * roster) is supplied by the grouping provider — the browser renders whatever
+ * it is given and owns no domain wording.
+ */
 export interface TeamGroupInfo {
-  kind: 'team'
+  kind: 'team' | 'event'
   title: string
   status: string
   messageCount?: number
+  /** Group glyph (an emoji/text rune) for the session-kind seat. */
+  icon?: string
+  /** Group kind label for blank-row titles and screen-reader descriptions. */
+  label?: string
+  /** Full member roster for the hover/focus member panel and count chip. */
+  members?: readonly { displayName: string; roleName: string; status: string }[]
   avatars: readonly { role: string; icon: string }[]
   /** Role members, each a standard DSH session id. */
   roles: readonly { role: string; sessionId: string; displayName: string; avatar: string }[]
@@ -319,7 +330,7 @@ export function deriveGroups(
   const withMembers = (session: SessionSummary): SessionNode => {
     const node = sessionNode(session, descendants)
     const info = grouping?.(session.id as string)
-    if (info?.kind !== 'team') return node
+    if (info === null || info === undefined || info.kind === 'role') return node
     const members: SessionNode[] = []
     for (const role of info.roles) {
       const child = list.byId[role.sessionId as SessionId]
