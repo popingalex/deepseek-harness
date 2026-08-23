@@ -1,0 +1,19 @@
+{
+  "pipelineId": "demo-18-smoke",
+  "runId": "2026-08-22T05-55-05-312Z",
+  "result": "PASS",
+  "startedAt": "2026-08-22T05:55:05.312Z",
+  "finishedAt": "2026-08-22T05:55:05.368Z",
+  "steps": [
+    {
+      "name": "确定性通过",
+      "command": "node -e process.exit(0)",
+      "exitCode": 0,
+      "durationMs": 56
+    }
+  ],
+  "environment": {
+    "node": "v24.13.0",
+    "platform": "win32"
+  }
+}

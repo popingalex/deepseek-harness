@@ -1,0 +1,2 @@
+=== 确定性失败步 (exit 1, 48ms) ===
+$ node -e process.exit(1)

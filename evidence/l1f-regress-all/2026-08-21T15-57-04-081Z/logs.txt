@@ -1,0 +1,2 @@
+=== 确定性通过步 (exit 0, 44ms) ===
+$ node -e process.exit(0)

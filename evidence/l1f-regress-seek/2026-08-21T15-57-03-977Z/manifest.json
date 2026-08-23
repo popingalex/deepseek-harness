@@ -1,0 +1,19 @@
+{
+  "pipelineId": "l1f-regress-seek",
+  "runId": "2026-08-21T15-57-03-977Z",
+  "result": "FAIL",
+  "startedAt": "2026-08-21T15:57:03.977Z",
+  "finishedAt": "2026-08-21T15:57:04.025Z",
+  "steps": [
+    {
+      "name": "确定性失败步",
+      "command": "node -e process.exit(1)",
+      "exitCode": 1,
+      "durationMs": 48
+    }
+  ],
+  "environment": {
+    "node": "v24.13.0",
+    "platform": "win32"
+  }
+}

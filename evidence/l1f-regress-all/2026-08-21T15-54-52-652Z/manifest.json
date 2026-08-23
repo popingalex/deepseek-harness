@@ -1,0 +1,19 @@
+{
+  "pipelineId": "l1f-regress-all",
+  "runId": "2026-08-21T15-54-52-652Z",
+  "result": "PASS",
+  "startedAt": "2026-08-21T15:54:52.652Z",
+  "finishedAt": "2026-08-21T15:54:52.692Z",
+  "steps": [
+    {
+      "name": "确定性通过步",
+      "command": "node -e process.exit(0)",
+      "exitCode": 0,
+      "durationMs": 40
+    }
+  ],
+  "environment": {
+    "node": "v24.13.0",
+    "platform": "win32"
+  }
+}
