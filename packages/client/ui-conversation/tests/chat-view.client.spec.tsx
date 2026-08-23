@@ -1171,11 +1171,12 @@ describe('ChatView', () => {
   })
 
   it('one ResizeObserver owns pinned dynamic-height follow and ignores growth while away', () => {
-    let notify: (() => void) | undefined
-    const observe = vi.fn()
+    let notify: ((entries: Array<{ target: Element; contentRect: { height: number } }>) => void) | undefined
+    const observed: Element[] = []
+    const observe = vi.fn((el: Element) => { observed.push(el) })
     class ResizeObserverStub {
       constructor(callback: ResizeObserverCallback) {
-        notify = () => { callback([], this as unknown as ResizeObserver) }
+        notify = (entries) => { callback(entries as unknown as ResizeObserverEntry[], this as unknown as ResizeObserver) }
       }
 
       observe = observe
@@ -1189,12 +1190,19 @@ describe('ChatView', () => {
     Object.defineProperty(scroller, 'clientHeight', { value: 300, writable: true })
     scroller.scrollTop = 700
     fireEvent.scroll(scroller)
+    const column = observed[0]!
+    // Baseline delivery (the browser's initial callback): height recorded, follow runs.
+    act(() => { notify?.([{ target: column, contentRect: { height: 600 } }]) })
     Object.defineProperty(scroller, 'scrollHeight', { value: 1_200, writable: true })
-    act(() => { notify?.() })
+    act(() => { notify?.([{ target: column, contentRect: { height: 700 } }]) })
     expect(scroller.scrollTop).toBe(1_200)
+    // Width-only change (same height): no follow write at all.
+    scroller.scrollTop = 1_100
+    act(() => { notify?.([{ target: column, contentRect: { height: 700 } }]) })
+    expect(scroller.scrollTop).toBe(1_100)
     readerScroll(scroller, 200)
     Object.defineProperty(scroller, 'scrollHeight', { value: 1_400, writable: true })
-    act(() => { notify?.() })
+    act(() => { notify?.([{ target: column, contentRect: { height: 800 } }]) })
     expect(scroller.scrollTop).toBe(200)
     expect(observe).toHaveBeenCalledTimes(1)
   })

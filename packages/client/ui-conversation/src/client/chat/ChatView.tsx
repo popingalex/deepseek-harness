@@ -377,14 +377,26 @@ export function ChatView({
   }
   // Streaming, tool disclosures, and other flow changes resize the column;
   // the sticky composer resizes outside it. This observer owns ChatView's
-  // dynamic-height follow decisions and writes only while the reader is pinned.
+  // dynamic-height follow decisions and writes only while the reader is
+  // pinned. Column WIDTH changes (window resize, sidebar drag) are not
+  // content growth: following them would slam the scroll to the floor on
+  // every resize frame, so only a height delta triggers the follow.
   useEffect(() => {
     const column = columnRef.current
     const local = listRef.current
     if (column === null || local === null || typeof ResizeObserver === 'undefined') return
     const scrollport = scrollerOf(local)
     const composer = scrollport.querySelector<HTMLElement>('[data-composer-seat]')
-    const observer = new ResizeObserver(() => { followRef.current?.() })
+    const lastHeights = new WeakMap<Element, number>()
+    const observer = new ResizeObserver((entries) => {
+      let heightChanged = false
+      for (const entry of entries) {
+        const height = entry.contentRect.height
+        if (lastHeights.get(entry.target) !== height) heightChanged = true
+        lastHeights.set(entry.target, height)
+      }
+      if (heightChanged) followRef.current?.()
+    })
     observer.observe(column)
     if (composer !== null) observer.observe(composer)
     return () => { observer.disconnect() }

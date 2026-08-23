@@ -31,6 +31,13 @@ export const SIDEBAR_COLLAPSED = 56
  * LG breakpoint); a manual toggle below it re-expands over the squeezed center
  * (stores.ts narrowExpanded). */
 export const SIDEBAR_AUTO_COLLAPSE = 1024
+/** Stability window for breakpoint crossings: the frame width must stay on the
+ * new side of SIDEBAR_AUTO_COLLAPSE this long before the rail actually flips.
+ * External layout pushes (sidebar plugins squeezing the app shell through a
+ * transitioned CSS margin) sweep the frame across the breakpoint for a few
+ * hundred ms on every drag commit; without the debounce the rail
+ * expands-then-collapses mid-gesture. */
+export const NARROW_DEBOUNCE_MS = 320
 /** Details drag clamp floor. */
 export const DETAILS_MIN = 300
 /** Details drag clamp ceiling. */

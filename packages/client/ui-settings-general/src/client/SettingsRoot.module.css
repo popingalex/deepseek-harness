@@ -65,8 +65,10 @@
 }
 
 /* Panel (figma Settings 501:29947): r24, white, lv3 shadow (figma effects
-   match --dsw-shadow-lv3 exactly); figma's 1080x700 is shrunk to 800 wide.
-   One height for every section, taken from the viewport rather than the
+   match --dsw-shadow-lv3 exactly). EH fork: figma's fixed 1080x700 becomes
+   viewport-proportional (cap 1200x860, 64/48px viewport margin) — the fixed
+   800px width starved wide settings content (EH SOP graph editor). One size
+   per viewport for every section, taken from the viewport rather than the
    content: sections differ by hundreds of pixels (a settings list against the
    composition editor), and a content-sized panel would resize under the
    pointer on every nav click. Whatever does not fit scrolls in `.options`. */
@@ -74,9 +76,8 @@
   position: relative;
   z-index: 1;
   display: flex;
-  width: 800px;
-  height: min(800px, calc(100vh - 48px));
-  max-width: calc(100vw - 48px);
+  width: min(1200px, calc(100vw - 64px));
+  height: min(860px, calc(100vh - 48px));
   border-radius: 24px;
   overflow: hidden;
   background: var(--dsw-alias-bg-layer-2);

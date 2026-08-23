@@ -15,7 +15,7 @@ import { act, cleanup, render } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
 import { AppFrame } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
 import type { AppFrameProps } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
-import { SIDEBAR_COLLAPSED } from '@deepseek-ai/dsh-client-ui-layout/src/client/columns.ts'
+import { NARROW_DEBOUNCE_MS, SIDEBAR_COLLAPSED } from '@deepseek-ai/dsh-client-ui-layout/src/client/columns.ts'
 import { createLayoutStore } from '@deepseek-ai/dsh-client-ui-layout/src/client/stores.ts'
 import type {
   SessionId, SessionListState, WorkspaceListState,
@@ -311,6 +311,7 @@ describe('AppFrame — narrow-viewport auto-collapse', () => {
     act(() => { instance.actions.toggleSidebar() }) // close while wide: preference 0
     frameWidth = 980
     act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
+    act(() => { vi.advanceTimersByTime(NARROW_DEBOUNCE_MS + 20) }) // crossings are debounced
     act(() => { instance.actions.toggleSidebar() })
     expect(tracks(frame)).toEqual([280, 0])
     expect(instance.getSnapshot().sidebar).toBe(0) // preference untouched
@@ -321,10 +322,26 @@ describe('AppFrame — narrow-viewport auto-collapse', () => {
     act(() => { instance.actions.setSidebar(400) })
     frameWidth = 980
     act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
+    act(() => { vi.advanceTimersByTime(NARROW_DEBOUNCE_MS + 20) })
     expect(tracks(frame)).toEqual([SIDEBAR_COLLAPSED, 0])
     frameWidth = 1920
     act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
+    act(() => { vi.advanceTimersByTime(NARROW_DEBOUNCE_MS + 20) })
     expect(tracks(frame)).toEqual([400, 0])
+  })
+
+  it('a transient sweep across the breakpoint never flips the rail', () => {
+    const { frame } = mountFrame()
+    // Drag-commit transients (external layout push settling) sweep the frame
+    // below the breakpoint for less than the debounce window: no collapse.
+    frameWidth = 980
+    act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
+    act(() => { vi.advanceTimersByTime(120) })
+    expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(false)
+    frameWidth = 1920
+    act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
+    act(() => { vi.advanceTimersByTime(NARROW_DEBOUNCE_MS + 100) })
+    expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(false)
   })
 })
 

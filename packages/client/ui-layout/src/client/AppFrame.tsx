@@ -10,10 +10,10 @@
  * through the three framework shares — zero cordis or framework imports,
  * zero self-made hooks.
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
-import { computeColumns, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT } from './columns.ts'
+import { computeColumns, NARROW_DEBOUNCE_MS, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT } from './columns.ts'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
 
@@ -133,7 +133,18 @@ export function AppFrame({
   // solver stays breakpoint-free: a narrow re-expand passes the preference
   // (or the default when the wide preference is closed) and the center
   // absorbs the squeeze.
-  const narrow = viewport < SIDEBAR_AUTO_COLLAPSE
+  //
+  // Crossings are debounced (NARROW_DEBOUNCE_MS): the frame box can sweep
+  // across the breakpoint transiently when an external layout push settles
+  // (a sidebar plugin's transitioned margin), and flipping the rail on such
+  // a sweep reads as the session list expanding-then-collapsing on release.
+  const narrowTarget = viewport < SIDEBAR_AUTO_COLLAPSE
+  const [narrow, setNarrow] = useState(narrowTarget)
+  useEffect(() => {
+    if (narrowTarget === narrow) return
+    const timer = setTimeout(() => { setNarrow(narrowTarget) }, NARROW_DEBOUNCE_MS)
+    return () => { clearTimeout(timer) }
+  }, [narrowTarget, narrow])
   useEffect(() => { actions.setNarrow(narrow) }, [actions, narrow])
   const sidebarCollapsed = narrow ? !panels.narrowExpanded : panels.sidebar === 0
   const sidebarPreference = sidebarCollapsed
@@ -161,6 +172,16 @@ export function AppFrame({
     actions.setDetails(detailsBase.current - dx)
   }, [actions])
 
+  // The session-aware occupants take constant owner props, so their slot
+  // elements are memoized on the (identity-stable) renderSlot binding:
+  // without a stable element identity, every viewport pixel and drag frame
+  // re-rendered the whole conversation subtree — the outlet re-reads its own
+  // registration version and does not need the parent to re-emit it. The
+  // sidebar slot stays inline: its owner props carry live concession output.
+  const conversationSlot = useMemo(() => renderSlot('conversation', {}), [renderSlot])
+  const detailsSlot = useMemo(() => renderSlot('details', {}), [renderSlot])
+  const overlaySlot = useMemo(() => renderSlot('shell.overlay', {}), [renderSlot])
+
   return (
     <div
       ref={frameRef}
@@ -187,11 +208,11 @@ export function AppFrame({
             the shell's own pending rendering. The conversation
             is session-maybe; the strict details entry naturally renders
             empty while no session is current. */}
-        <CenterColumn>{renderSlot('conversation', {})}</CenterColumn>
-        <DetailsColumn>{renderSlot('details', {})}</DetailsColumn>
+        <CenterColumn>{conversationSlot}</CenterColumn>
+        <DetailsColumn>{detailsSlot}</DetailsColumn>
       </>
       <div className={css.overlayLayer} data-shell-overlay>
-        {renderSlot('shell.overlay', {})}
+        {overlaySlot}
       </div>
       {/* The collapsed rail is fixed-width: no resize handle while closed. */}
       {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
