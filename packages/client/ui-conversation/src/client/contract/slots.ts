@@ -152,6 +152,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * standard conversation (chat view) is the fallback. This lets a plugin
      * render a different session experience for its own session kinds while
      * leaving every standard DSH session untouched (08-updated §7).
+     *
+     * @deprecated No consumer since the EH architecture correction (req 10/11
+     * baseline): taking over the middle column was reverted in favour of the
+     * additive conversationEvents / keyed chat-node projection. Kept only as
+     * a typed seam until its removal is decided upstream-side (req 082501
+     * drift list #2).
      */
     'conversation.session.renderer': { kind: 'chain'; scope: 'session'; owner: SessionRendererOwnerProps }
     /**
