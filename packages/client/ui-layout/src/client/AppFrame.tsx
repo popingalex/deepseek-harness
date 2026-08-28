@@ -12,8 +12,11 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import type {
+  PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore,
+} from '@deepseek-ai/dsh-client-ui-slots'
 import { computeColumns, NARROW_DEBOUNCE_MS, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT } from './columns.ts'
+import { DocumentTitle } from './DocumentTitle.tsx'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
 
@@ -22,6 +25,7 @@ export type AppFrameProps =
   & PropsRuntime<'root'>
   & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'shell.overlay'>
   & PropsStore<ReturnType<typeof createLayoutStore>>
+  & PropsLocale<'common'>
 
 /** Center column grid item (session-body building block). */
 function CenterColumn(props: { children?: ReactNode }) {
@@ -89,11 +93,17 @@ export function AppFrame({
   useSessions,
   actions,
   renderSlot,
+  SessionProvider,
+  t,
 }: AppFrameProps) {
   const panels = useStore(s => s)
   const detailsSession = useSessions((s) => {
     const current = s.current
     return current !== undefined && s.byId[current]?.blank === false ? current : undefined
+  })
+  const documentTitle = useSessions((s) => {
+    const current = s.current
+    return current === undefined ? undefined : s.byId[current]?.title
   })
   const frameRef = useRef<HTMLDivElement | null>(null)
   const [viewport, setViewport] = useState(() => window.innerWidth)
@@ -171,6 +181,7 @@ export function AppFrame({
   const onDetailsDrag = useCallback((dx: number) => {
     actions.setDetails(detailsBase.current - dx)
   }, [actions])
+  const productTitle = process.env.DSH_CLIENT_TITLE ?? t('brand.localBuild')
 
   // The session-aware occupants take constant owner props, so their slot
   // elements are memoized on the (identity-stable) renderSlot binding:
@@ -178,8 +189,6 @@ export function AppFrame({
   // re-rendered the whole conversation subtree — the outlet re-reads its own
   // registration version and does not need the parent to re-emit it. The
   // sidebar slot stays inline: its owner props carry live concession output.
-  const conversationSlot = useMemo(() => renderSlot('conversation', {}), [renderSlot])
-  const detailsSlot = useMemo(() => renderSlot('details', {}), [renderSlot])
   const overlaySlot = useMemo(() => renderSlot('shell.overlay', {}), [renderSlot])
 
   return (
@@ -191,6 +200,10 @@ export function AppFrame({
       data-details-collapsed={cols.details === 0 || undefined}
       data-dragging={dragging || undefined}
     >
+      <DocumentTitle
+        productTitle={productTitle}
+        {...documentTitle === undefined ? {} : { title: documentTitle }}
+      />
       <div className={css.sidebarCol}>
         {/* Render-site slot call with live concession output: a closed
             sidebar keeps the mounted slot at the compact-rail width, and the
@@ -206,10 +219,12 @@ export function AppFrame({
         {/* Both column occupants stay at fixed tree positions from first
             paint — no loading gate: a bare status line reads worse than
             the shell's own pending rendering. The conversation
-            is session-maybe; the strict details entry naturally renders
-            empty while no session is current. */}
-        <CenterColumn>{conversationSlot}</CenterColumn>
-        <DetailsColumn>{detailsSlot}</DetailsColumn>
+            is session-maybe; SessionProvider withholds the strict details
+            entry while no session is current. */}
+        <CenterColumn>{renderSlot('conversation', {})}</CenterColumn>
+        <DetailsColumn>
+          <SessionProvider>{renderSlot('details', {})}</SessionProvider>
+        </DetailsColumn>
       </>
       <div className={css.overlayLayer} data-shell-overlay>
         {overlaySlot}
