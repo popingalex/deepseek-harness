@@ -1,4 +1,18 @@
-export type StructuredReferenceKind = 'location' | 'asset' | 'issue' | 'fact'
+// req 082703 M4 词表收敛：与 @emergency-harness/dsh-eh-reference 的 KINDS
+// 保持一致（EH 包是产品渲染路径的 canonical 实现——三个会话消息 renderer
+// 均由 EH 插件接管并注入可点击 chip；此处的副本保证未被接管的渲染面与
+// 未来上游消费展示同一词表，token 不再因白名单错位被丢弃）。
+export type StructuredReferenceKind =
+  | 'location'
+  | 'asset'
+  | 'issue'
+  | 'fact'
+  | 'knowledge'
+  | 'task'
+  | 'work'
+  | 'commit'
+  | 'merge-request'
+  | 'web-element'
 
 export interface StructuredReferenceLocation {
   readonly longitude: number
@@ -20,17 +34,30 @@ export type StructuredReferenceSegment =
   | { readonly kind: 'reference'; readonly reference: StructuredReference }
 
 const TOKEN_PATTERN = /\[\[(EH_REF_V1|EH_LOCATION_V1):([\s\S]*?)\]\]/g
-const KINDS: readonly StructuredReferenceKind[] = ['location', 'asset', 'issue', 'fact']
+const KINDS: readonly StructuredReferenceKind[] = ['location', 'asset', 'issue', 'fact', 'knowledge', 'task', 'work', 'commit', 'merge-request', 'web-element']
 const FALLBACK_LABELS: Readonly<Record<StructuredReferenceKind, string>> = {
   location: '📍',
   asset: '资产引用',
   issue: '问题引用',
   fact: '事实引用',
+  knowledge: '知识引用',
+  task: '事务引用',
+  work: '工作项引用',
+  commit: '提交引用',
+  'merge-request': 'MR 引用',
+  'web-element': '网页元素引用',
 }
-const KIND_META: Readonly<Record<'asset' | 'issue' | 'fact', { readonly icon: string; readonly label: string }>> = {
+const KIND_META: Readonly<Record<'asset' | 'issue' | 'fact' | 'knowledge' | 'task' | 'work' | 'commit' | 'merge-request' | 'web-element', { readonly icon: string; readonly label: string }>> = {
   asset: { icon: '▣', label: '资产' },
   issue: { icon: '!', label: '问题' },
   fact: { icon: '◆', label: '事实' },
+  knowledge: { icon: '◈', label: '知识' },
+  task: { icon: '❑', label: '事务' },
+  work: { icon: '▤', label: '工作项' },
+  commit: { icon: '⊕', label: '提交' },
+  'merge-request': { icon: '⇅', label: '合并请求' },
+  // req 082705：Browser Test Studio 拾取的页面元素（结构化上下文进对话）
+  'web-element': { icon: '🌐', label: '网页元素' },
 }
 const LOCATION_SHAPE_META: Readonly<Record<string, { readonly icon: string; readonly label: string }>> = {
   point: { icon: '📍', label: '定位点' },
@@ -140,7 +167,12 @@ export function formatStructuredReference(reference: StructuredReference): strin
   }
   const meta = KIND_META[reference.kind]
   if (meta === undefined) return FALLBACK_LABELS[reference.kind]
-  return `${meta.icon} ${meta.label}${reference.name === undefined ? '' : ` · ${reference.name}`}`
+  // req 082703 M4：id 型引用把 id 放进展示名（与 dsh-eh-reference 同步）。
+  const name = optionalText(reference.name)
+  const id = optionalText(reference.id)
+  const showsId = id !== undefined && (name === undefined || !name.includes(id))
+  const ident = showsId ? `${id}${name === undefined ? '' : ` ${name}`}` : name
+  return `${meta.icon} ${meta.label}${ident === undefined ? '' : ` · ${ident}`}`
 }
 
 /** Return clipboard text containing display-safe labels instead of valid wire tokens. */
