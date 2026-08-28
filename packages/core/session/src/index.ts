@@ -223,6 +223,10 @@ function assertSessionEventEnvelope(value: Record<string, unknown>, index: numbe
       case 'data':
       case 'surfaceOp':
       case 'sourceEventSeqs':
+      // Downstream plugin events: writer-stamped "skippable when the owning
+      // plugin is absent" flag (SessionEvent#ignorable) — persisted envelope
+      // key, no session semantics.
+      case 'ignorable':
         break
       default:
         throw new Error(`seed event at index ${index} has an invalid event envelope`)

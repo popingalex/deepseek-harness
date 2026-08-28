@@ -1150,10 +1150,17 @@ export class PersistenceCoordinator<TornMarker = unknown> {
    * NORMALIZED events — after `snapshotStoredEvents`/`adoptStoredEvents` has
    * upgraded the legacy shapes this build still reads and rejected the ones it
    * does not, so those keep their specific diagnostics.
+   *
+   * Exception: downstream plugin events explicitly stamped `ignorable: true`
+   * (display-only projections; e.g. EH `eh/team-message`) are skipped instead.
+   * The stamp is the writer's contract that the event carries no session
+   * semantics, so a build without the owning plugin stays readable — the same
+   * guarantee the append-side `ignorable` flag was added for.
    */
   private assertEventsSupported(meta: SessionHeader, events: readonly SessionEvent[]): void {
     for (const event of events) {
       if (KNOWN_SESSION_EVENT_TYPES.has(event.type)) continue
+      if ((event as { ignorable?: boolean }).ignorable === true) continue
       throw this.unsupported(meta, `session "${meta.id}" contains event type "${event.type}" (seq ${event.seq}) unknown to this harness; refusing to interpret the log — it was likely written by a newer harness`)
     }
   }
