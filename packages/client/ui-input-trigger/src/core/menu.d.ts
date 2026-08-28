@@ -10,10 +10,10 @@
  * while open (query refinement) resets the existing groups to pending under
  * a new generation. Auto-close and explicit close drop the groups.
  */
-import type { InputTriggerSource } from '../types.ts';
-import type { ExactMatch, MenuReduce, MenuState } from './contract.ts';
+import type { InputTriggerSource } from '../types.ts'
+import type { ExactMatch, MenuReduce, MenuState } from './contract.ts'
 /** Closed rest state with generation 0; store initializer and test seed. */
-export declare const MENU_CLOSED: MenuState;
+export declare const MENU_CLOSED: MenuState
 /**
  * Replace the group roster with pending groups for `sources`, in order.
  * Shell-side step before dispatching `hit` on a fresh menu open.
@@ -22,7 +22,7 @@ export declare const MENU_CLOSED: MenuState;
  * @param sources - Sources registered for the hit trigger, in menu order.
  * @returns State carrying the new pending roster; highlight cleared.
  */
-export declare function seedGroups(state: MenuState, sources: readonly Pick<InputTriggerSource, 'name' | 'showGroupTitle'>[]): MenuState;
+export declare function seedGroups(state: MenuState, sources: readonly Pick<InputTriggerSource, 'name' | 'showGroupTitle'>[]): MenuState
 /**
  * Pure menu reducer. `hit` opens a new generation over the seeded roster
  * (null hit closes); `source-settled` outside the current generation, the
@@ -36,7 +36,7 @@ export declare function seedGroups(state: MenuState, sources: readonly Pick<Inpu
  * @param ev - Menu event.
  * @returns Next state; the same reference when stale or a no-op.
  */
-export declare const menuReduce: MenuReduce;
+export declare const menuReduce: MenuReduce
 /**
  * Exact-name lookup in one source's ready group.
  *
@@ -46,5 +46,5 @@ export declare const menuReduce: MenuReduce;
  * @returns The candidate, or null when the group is absent, not ready, or
  * has no candidate of that name.
  */
-export declare const exactMatch: ExactMatch;
+export declare const exactMatch: ExactMatch
 //# sourceMappingURL=menu.d.ts.map

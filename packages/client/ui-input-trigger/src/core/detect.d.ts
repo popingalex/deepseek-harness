@@ -1,4 +1,4 @@
-import type { DetectTrigger } from './contract.ts';
+import type { DetectTrigger } from './contract.ts'
 /**
  * Detect a trigger token at the caret. `@` first uses the shared grammar,
  * including an open quoted token that may span whitespace. Slash detection
@@ -15,5 +15,5 @@ import type { DetectTrigger } from './contract.ts';
  * — the calling shell stamps the real revision. Null when no trigger is
  * live at the caret.
  */
-export declare const detectTrigger: DetectTrigger;
+export declare const detectTrigger: DetectTrigger
 //# sourceMappingURL=detect.d.ts.map
