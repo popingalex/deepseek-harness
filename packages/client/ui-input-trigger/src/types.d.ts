@@ -20,7 +20,7 @@ export interface ClientSessionContext {
   readonly sessionId: SessionId
 }
 /** Trigger character a source binds to. */
-export type TriggerChar = '/' | '@' | '#' | '#'
+export type TriggerChar = '/' | '@' | '#'
 /** Where the trigger token sits in the draft: leading (trimmed draft starts with it) or inline. */
 export type TriggerPosition = 'leading' | 'inline'
 /** Which of the three pick paths produced a pick. */
