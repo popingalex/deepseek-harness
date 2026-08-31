@@ -1,5 +1,12 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { CredentialProvider, CredentialRecord } from '@deepseek-ai/dsh-credentials'
+
+// Connection activation records the durable launch token under $DSH_HOME;
+// tests must never touch the developer's real home.
+process.env.DSH_HOME = mkdtempSync(join(tmpdir(), 'dsh-connection-tests-'))
 
 /** Mutable credential-record double for Connection authentication tests. */
 export class RecordCredentials {

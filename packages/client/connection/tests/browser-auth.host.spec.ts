@@ -1,7 +1,10 @@
 /** Browser launch-token and persistent-cookie behavior. */
 
-import { createHmac } from 'node:crypto'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createHash, createHmac } from 'node:crypto'
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CredentialProvider } from '@deepseek-ai/dsh-credentials'
 import { BrowserAuth } from '../src/browser-auth.ts'
 import type { ConnectionIndexRequest, ConnectionIndexResponse } from '../src/rpc.ts'
@@ -51,13 +54,27 @@ function credentials(store: RecordCredentials): CredentialProvider {
   return store as unknown as CredentialProvider
 }
 
-function createAuth(
-  store: RecordCredentials,
-  maxAgeDays = 30,
-  processOwner: object = {},
-): Promise<BrowserAuth> {
-  return BrowserAuth.create(processOwner, credentials(store), maxAgeDays)
+function createAuth(store: RecordCredentials, maxAgeDays = 30): Promise<BrowserAuth> {
+  return BrowserAuth.create(credentials(store), maxAgeDays)
 }
+
+/** The launch token this authentication instance authenticates. */
+function tokenOf(auth: BrowserAuth): string {
+  return new URL(auth.authenticatedUrl('http://127.0.0.1:3080')).searchParams.get('token') as string
+}
+
+let testHome: string
+
+beforeEach(() => {
+  testHome = mkdtempSync(join(tmpdir(), 'dsh-browser-auth-home-'))
+  process.env.DSH_HOME = testHome
+})
+
+afterEach(() => {
+  delete process.env.DSH_HOME
+  rmSync(testHome, { recursive: true, force: true })
+  vi.useRealTimers()
+})
 
 function request(url: string, authority = '127.0.0.1:3080', init?: {
   cookie?: string
@@ -86,15 +103,10 @@ function exchange(
   return { cookie: setCookie.split(';', 1)[0]!, launchUrl, state: res.state }
 }
 
-afterEach(() => {
-  vi.useRealTimers()
-})
-
 describe('BrowserAuth', () => {
-  it('mints one process token and a persistent authority-bound cookie', async () => {
+  it('mints one durable token, records it at the fixed home path, and keeps it across activations', async () => {
     const store = new RecordCredentials()
-    const processOwner = {}
-    const first = await createAuth(store, 30, processOwner)
+    const first = await createAuth(store)
     const login = exchange(first)
 
     expect(login.state).toMatchObject({
@@ -107,6 +119,7 @@ describe('BrowserAuth', () => {
     })
     expect(login.state.headers?.['set-cookie']).toMatch(/; Max-Age=2592000; Path=\/; Expires=.*; HttpOnly; SameSite=Strict$/u)
     expect(login.state.headers?.['set-cookie']).not.toContain('Secure')
+    expect(tokenOf(first)).toMatch(/^[A-Za-z0-9_-]{43}$/u)
     expect(first.isAuthenticated(request('/', '127.0.0.1:3080', { cookie: login.cookie }))).toBe(true)
     expect(first.isAuthenticated({
       headers: new Headers({ host: '127.0.0.1:3080', cookie: login.cookie }),
@@ -115,21 +128,27 @@ describe('BrowserAuth', () => {
     expect(first.isAuthenticated(request('/', 'localhost:3080', { cookie: login.cookie }))).toBe(false)
     expect(first.isAuthenticated(request('/', '127.0.0.1:3081', { cookie: login.cookie }))).toBe(false)
 
-    const reloaded = await createAuth(store, 30, processOwner)
+    // The fixed home path receives the plain token on every activation.
+    const tokenFile = join(testHome, 'web-token')
+    expect(readFileSync(tokenFile, 'utf8')).toBe(tokenOf(first))
+    if (process.platform !== 'win32') {
+      expect(statSync(tokenFile).mode & 0o777).toBe(0o600)
+    }
+
+    // Reloads and process restarts share one durable token; the recorded
+    // file stays authoritative for scripts and probes.
+    const reloaded = await createAuth(store)
     expect(reloaded.authenticatedUrl('http://127.0.0.1:3080')).toBe(login.launchUrl)
     expect(reloaded.isAuthenticated(request('/', '127.0.0.1:3080', { cookie: login.cookie }))).toBe(true)
-
     const restarted = await createAuth(store)
-    expect(new URL(restarted.authenticatedUrl('http://127.0.0.1:3080')).searchParams.get('token'))
-      .not.toBe(new URL(login.launchUrl).searchParams.get('token'))
-    expect(restarted.isAuthenticated(request('/', '127.0.0.1:3080', { cookie: login.cookie }))).toBe(true)
-    const staleUrl = new URL(login.launchUrl)
+    expect(tokenOf(restarted)).toBe(tokenOf(first))
+    expect(readFileSync(tokenFile, 'utf8')).toBe(tokenOf(first))
+
+    // An obsolete or wrong token paired with a valid cookie still redirects
+    // to the clean root instead of erroring.
+    const staleUrl = `/?token=${'x'.repeat(43)}`
     const redirected = response()
-    expect(restarted.authorizeIndex(request(
-      `${staleUrl.pathname}${staleUrl.search}`,
-      '127.0.0.1:3080',
-      { cookie: login.cookie },
-    ), redirected.value)).toBe(false)
+    expect(restarted.authorizeIndex(request(staleUrl, '127.0.0.1:3080', { cookie: login.cookie }), redirected.value)).toBe(false)
     expect(redirected.state).toEqual({
       status: 303,
       headers: {
@@ -225,6 +244,29 @@ describe('BrowserAuth', () => {
     expect(reactivated.isAuthenticated(request('/', '127.0.0.1:3080', { cookie: first.cookie }))).toBe(false)
     expect(reactivated.isAuthenticated(request('/', '127.0.0.1:3080', { cookie: second.cookie }))).toBe(true)
     expect(store).toMatchObject({ reads: 0, modifies: 2 })
+    // Deletion is the revocation path: the replacement record also rotates
+    // the durable launch token.
+    expect(tokenOf(reactivated)).not.toBe(tokenOf(auth))
+  })
+
+  it('upgrades a legacy record in place, keeping the secret and adding the durable token', async () => {
+    const store = new RecordCredentials()
+    const legacySecret = Buffer.alloc(32, 7).toString('base64url')
+    store.record = { kind: 'grant', payload: { version: 1, secret: legacySecret } }
+    // A cookie minted before the upgrade keeps authenticating: the canonical
+    // authority-bound name and the legacy secret both stay valid.
+    const carriedName = `dsh-auth-${createHash('sha256').update('127.0.0.1:3080').digest('base64url')}`
+    const carried = signedCookie(store, carriedName, {
+      version: 1, authority: '127.0.0.1:3080', issuedAt: Date.now(), expiresAt: Date.now() + 1000,
+    })
+
+    const auth = await createAuth(store)
+    expect(auth.isAuthenticated(request('/', '127.0.0.1:3080', { cookie: carried }))).toBe(true)
+    expect(tokenOf(auth)).toMatch(/^[A-Za-z0-9_-]{43}$/u)
+    const payload = store.record?.kind === 'grant' ? store.record.payload as Record<string, unknown> : undefined
+    expect(payload?.version).toBe(2)
+    expect(payload?.secret).toBe(legacySecret)
+    expect(readFileSync(join(testHome, 'web-token'), 'utf8')).toBe(tokenOf(auth))
   })
 
   it('fails loud on an invalid owner record instead of replacing it', async () => {
@@ -240,11 +282,44 @@ describe('BrowserAuth', () => {
     nonString.record = { kind: 'grant', payload: { version: 1, secret: 42 } }
     await expect(createAuth(nonString)).rejects.toThrow(/invalid secret/u)
 
+    const unknownVersion = new RecordCredentials()
+    unknownVersion.record = { kind: 'grant', payload: { version: 3, secret: Buffer.alloc(32, 1).toString('base64url') } }
+    await expect(createAuth(unknownVersion)).rejects.toThrow(/unsupported format/u)
+
+    const corruptToken = new RecordCredentials()
+    corruptToken.record = {
+      kind: 'grant',
+      payload: { version: 2, secret: Buffer.alloc(32, 1).toString('base64url'), launchToken: 'short' },
+    }
+    await expect(createAuth(corruptToken)).rejects.toThrow(/invalid launch token/u)
+
+    const missingToken = new RecordCredentials()
+    missingToken.record = { kind: 'grant', payload: { version: 2, secret: Buffer.alloc(32, 1).toString('base64url') } }
+    await expect(createAuth(missingToken)).rejects.toThrow(/invalid launch token/u)
+
     const discarded = new RecordCredentials()
     discarded.discardWrites = true
     await expect(createAuth(discarded)).rejects.toThrow(/was not created/u)
 
     await expect(createAuth(new RecordCredentials(), Number.MAX_SAFE_INTEGER))
       .rejects.toThrow(/safe timestamp range/u)
+  })
+
+  it('keeps the server authenticating when the fixed token file cannot be written', async () => {
+    // A home path occupied by a file makes every mkdir beneath it fail.
+    const blocker = join(testHome, 'blocker')
+    writeFileSync(blocker, '')
+    process.env.DSH_HOME = blocker
+    const diagnostic = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const auth = await createAuth(new RecordCredentials())
+      const { cookie } = exchange(auth)
+      expect(auth.isAuthenticated(request('/', '127.0.0.1:3080', { cookie }))).toBe(true)
+      expect(diagnostic).toHaveBeenCalledWith(
+        expect.stringContaining('could not record the web launch token'),
+      )
+    } finally {
+      diagnostic.mockRestore()
+    }
   })
 })

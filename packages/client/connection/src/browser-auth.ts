@@ -1,8 +1,11 @@
 /** Browser-session authentication for the Host Connection carrier. */
 
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import { credentialKey } from '@deepseek-ai/dsh-credentials'
 import type { CredentialProvider, CredentialRecord } from '@deepseek-ai/dsh-credentials'
+import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import type {
   ConnectionIndexRequest,
   ConnectionIndexResponse,
@@ -15,13 +18,18 @@ const SECRET_BYTES = 32
 const TOKEN_QUERY = 'token'
 const COOKIE_PREFIX = 'dsh-auth-'
 const COOKIE_PAYLOAD_VERSION = 1
-const STORED_SECRET_VERSION = 1
+const STORED_RECORD_VERSION = 2
+/** Fixed Harness-home path that receives the launch token on every activation. */
+const TOKEN_FILE_NAME = 'web-token'
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]*$/
-const PROCESS_LAUNCH_TOKENS = new WeakMap<object, string>()
 
-interface StoredSecretPayload {
-  readonly version: typeof STORED_SECRET_VERSION
+/** Version 1 records predate the durable launch token and upgrade in place. */
+const LEGACY_RECORD_VERSION = 1
+
+interface StoredRecordPayload {
+  readonly version: typeof STORED_RECORD_VERSION
   readonly secret: string
+  readonly launchToken: string
 }
 
 interface BrowserCookiePayload {
@@ -47,14 +55,6 @@ function decodeBase64Url(value: string): Buffer | undefined {
   const padding = '='.repeat((4 - value.length % 4) % 4)
   const decoded = Buffer.from(value.replaceAll('-', '+').replaceAll('_', '/') + padding, 'base64')
   return encodeBase64Url(decoded) === value ? decoded : undefined
-}
-
-function processLaunchToken(owner: object): string {
-  const existing = PROCESS_LAUNCH_TOKENS.get(owner)
-  if (existing !== undefined) return existing
-  const created = encodeBase64Url(randomBytes(SECRET_BYTES))
-  PROCESS_LAUNCH_TOKENS.set(owner, created)
-  return created
 }
 
 function header(
@@ -84,17 +84,29 @@ function canonicalSecret(value: unknown): Buffer | undefined {
   return decoded
 }
 
-function storedSecret(record: CredentialRecord | undefined): Buffer | undefined {
-  if (record === undefined) return undefined
+interface LoadedRecord {
+  readonly secret: Buffer
+  /** Undefined only while reading a version-1 record awaiting its in-place upgrade. */
+  readonly launchToken: string | undefined
+}
+
+/** Parse one stored record of either payload version, failing loud on corruption. */
+function storedAuth(record: CredentialRecord): LoadedRecord {
   if (record.kind !== 'grant' || !isRecord(record.payload)
-    || record.payload.version !== STORED_SECRET_VERSION) {
+    || (record.payload.version !== LEGACY_RECORD_VERSION
+      && record.payload.version !== STORED_RECORD_VERSION)) {
     throw new Error('client-connection: browser-session credential record has an unsupported format')
   }
   const secret = canonicalSecret(record.payload.secret)
   if (secret === undefined) {
     throw new Error('client-connection: browser-session credential record has an invalid secret')
   }
-  return secret
+  if (record.payload.version === LEGACY_RECORD_VERSION) return { secret, launchToken: undefined }
+  const launchToken = canonicalSecret(record.payload.launchToken)
+  if (launchToken === undefined) {
+    throw new Error('client-connection: browser-session credential record has an invalid launch token')
+  }
+  return { secret, launchToken: encodeBase64Url(launchToken) }
 }
 
 function tokenMatches(actual: string, expected: string): boolean {
@@ -158,40 +170,72 @@ function decodeCookie(value: string, secret: Buffer): BrowserCookiePayload | und
   return decoded as unknown as BrowserCookiePayload
 }
 
-async function initializeSecret(credentials: CredentialProvider): Promise<Buffer> {
-  const generated: StoredSecretPayload = {
-    version: STORED_SECRET_VERSION,
+async function initializeAuth(credentials: CredentialProvider): Promise<{ secret: Buffer; launchToken: string }> {
+  const generated: StoredRecordPayload = {
+    version: STORED_RECORD_VERSION,
     secret: encodeBase64Url(randomBytes(SECRET_BYTES)),
+    launchToken: encodeBase64Url(randomBytes(SECRET_BYTES)),
   }
   const record = await credentials.modifyRecord(AUTH_RECORD_KEY, (current) => {
-    if (current !== undefined) {
-      storedSecret(current)
-      return Promise.resolve(undefined)
+    if (current === undefined) {
+      return Promise.resolve({ kind: 'grant', payload: generated })
     }
-    return Promise.resolve({ kind: 'grant', payload: generated })
+    const loaded = storedAuth(current)
+    if (loaded.launchToken !== undefined) return Promise.resolve(undefined)
+    // Legacy upgrade: keep the validated secret so existing cookies survive,
+    // and add the durable launch token that rotation used to regenerate.
+    return Promise.resolve({
+      kind: 'grant',
+      payload: {
+        version: STORED_RECORD_VERSION,
+        secret: encodeBase64Url(loaded.secret),
+        launchToken: generated.launchToken,
+      } satisfies StoredRecordPayload,
+    })
   })
-  const secret = storedSecret(record)
-  if (secret === undefined) {
+  if (record === undefined) {
     throw new Error('client-connection: browser-session credential record was not created')
   }
-  return secret
+  const loaded = storedAuth(record)
+  if (loaded.launchToken === undefined) {
+    throw new Error('client-connection: browser-session credential record has an unsupported format')
+  }
+  return { secret: loaded.secret, launchToken: loaded.launchToken }
 }
 
 /**
- * Process launch-token exchange and persistent signed-cookie verification.
- * Connection loads the credential provider's signing secret during activation
- * and retains it for synchronous request authentication.
+ * Record the durable launch token at its fixed Harness-home path so scripts
+ * and probes can read it without parsing process output. Best effort: a
+ * failed write never blocks the server.
+ */
+async function recordLaunchTokenFile(launchToken: string): Promise<void> {
+  const file = dshHomePath(TOKEN_FILE_NAME)
+  try {
+    await mkdir(dirname(file), { recursive: true })
+    await writeFile(file, launchToken, { mode: 0o600 })
+  } catch (error) {
+    console.error(`client-connection: could not record the web launch token at ${file}: ${String(error)}`)
+  }
+}
+
+/**
+ * Durable launch-token exchange and persistent signed-cookie verification.
+ * Connection loads the credential provider's signing secret and launch token
+ * during activation and retains them for synchronous request authentication.
+ * The launch token is durable like the secret: one Harness home keeps a
+ * single token across restarts, and every activation re-records it at the
+ * fixed `web-token` home path.
  */
 export class BrowserAuth {
   private readonly launchToken: string
   private readonly maxAgeMilliseconds: number
 
   private constructor(
-    processOwner: object,
+    launchToken: string,
     private readonly secret: Buffer,
     maxAgeDays: number,
   ) {
-    this.launchToken = processLaunchToken(processOwner)
+    this.launchToken = launchToken
     this.maxAgeMilliseconds = maxAgeDays * DAY_MILLISECONDS
     if (!Number.isSafeInteger(this.maxAgeMilliseconds)
       || !Number.isSafeInteger(Date.now() + this.maxAgeMilliseconds)) {
@@ -200,25 +244,25 @@ export class BrowserAuth {
   }
 
   /**
-   * Initialize browser authentication and create its durable signing secret
-   * when this Harness home has none.
-   * @param processOwner - root application context retaining one token across Connection reloads.
+   * Initialize browser authentication: load or create the durable signing
+   * secret and launch token, then record the token at the fixed home path.
    * @param credentials - persistent credential provider for the Web profile.
    * @param maxAgeDays - positive absolute browser-cookie lifetime in days.
-   * @returns initialized authentication owner with the process owner's launch token.
+   * @returns initialized authentication owner with the durable launch token.
    */
   static async create(
-    processOwner: object,
     credentials: CredentialProvider,
     maxAgeDays: number,
   ): Promise<BrowserAuth> {
-    return new BrowserAuth(processOwner, await initializeSecret(credentials), maxAgeDays)
+    const { secret, launchToken } = await initializeAuth(credentials)
+    await recordLaunchTokenFile(launchToken)
+    return new BrowserAuth(launchToken, secret, maxAgeDays)
   }
 
   /**
-   * Add this process's launch token to the ordinary application root URL.
+   * Add the durable launch token to the ordinary application root URL.
    * @param baseUrl - canonical browser origin without credentials.
-   * @returns root URL carrying the process token as its sole authentication input.
+   * @returns root URL carrying the token as its sole authentication input.
    */
   authenticatedUrl(baseUrl: string): string {
     const url = new URL(baseUrl)

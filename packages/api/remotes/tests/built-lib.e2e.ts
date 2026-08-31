@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -30,7 +31,20 @@ const requiredArtifacts = [
 ].every(path => existsSync(artifact(path)))
 
 describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
-  it('runs root and Agent-scoped calls through generated bundles and real HTTP', async () => {
+  it('runs root and Agent-scoped calls through generated bundles and real HTTP', { timeout: 60_000 }, async () => {
+    // The spawned plain-Node script inherits this env; Connection activation
+    // records its durable launch token under $DSH_HOME, so keep it throwaway.
+    const previousHome = process.env.DSH_HOME
+    process.env.DSH_HOME = mkdtempSync(join(tmpdir(), 'dsh-remotes-built-lib-'))
+    try {
+      await runComposition()
+    } finally {
+      if (previousHome === undefined) delete process.env.DSH_HOME
+      else process.env.DSH_HOME = previousHome
+    }
+  })
+
+  async function runComposition(): Promise<void> {
     const urls = Object.fromEntries(Object.entries({
       agent: 'packages/core/agent/lib/index.js',
       apiGatewayClient: 'packages/api/gateway/lib/client.js',
@@ -234,7 +248,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
     })
     expect(output.rootResult.ref.id).toMatch(/^goal-/)
     expect(output.scopedResult.ref.id).toMatch(/^goal-/)
-  }, 60_000)
+  }
 })
 
 /** Execute one ESM script without tsx or a TypeScript loader. */

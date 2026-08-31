@@ -2,6 +2,7 @@
 
 import type { ChildProcess } from 'node:child_process'
 import { spawn } from 'node:child_process'
+import { readFileSync, statSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { request as httpRequest } from 'node:http'
 import { createRequire } from 'node:module'
@@ -152,7 +153,7 @@ function describeSettings(port: number, host: string, cookie?: string): Promise<
 }
 
 describe('dsh web authentication through the real CLI', () => {
-  it('rejects a forged loopback Host and preserves the browser cookie across restart', { timeout: 180_000 }, async () => {
+  it('rejects a forged loopback Host and preserves the browser cookie and launch token across restart', { timeout: 180_000 }, async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-web-auth-real-cli-'))
     const dshHome = join(root, '.dsh')
     const port = await freePort()
@@ -189,11 +190,21 @@ describe('dsh web authentication through the real CLI', () => {
         result: { ok: true, value: { namespaces: expect.any(Array) as unknown } },
       })
 
+      // Every activation records the launch token at the fixed home path.
+      const tokenFile = join(dshHome, 'web-token')
+      expect(readFileSync(tokenFile, 'utf8')).toBe(firstUrl.searchParams.get('token'))
+      if (process.platform !== 'win32') {
+        expect(statSync(tokenFile).mode & 0o777).toBe(0o600)
+      }
+
       await stopWeb(first)
       first = undefined
       second = await startWeb(root, dshHome, port)
       const secondUrl = new URL(second.launchUrl)
-      expect(secondUrl.searchParams.get('token')).not.toBe(firstUrl.searchParams.get('token'))
+      // The launch token is durable: one Harness home keeps one token across
+      // restarts, and the recorded file stays authoritative.
+      expect(secondUrl.searchParams.get('token')).toBe(firstUrl.searchParams.get('token'))
+      expect(readFileSync(tokenFile, 'utf8')).toBe(secondUrl.searchParams.get('token'))
       expect((await describeSettings(port, secondUrl.host, cookie)).status).toBe(200)
 
       const credentialMode = (await stat(join(dshHome, '.credentials.yaml'))).mode & 0o777

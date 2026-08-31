@@ -21,10 +21,14 @@ import * as FrontendStatic from '../src/index.ts'
 
 let root: string | undefined
 let context: Context | undefined
+let previousHome: string | undefined
 
 afterEach(async () => {
   await context?.fiber.dispose()
   context = undefined
+  if (previousHome === undefined) delete process.env.DSH_HOME
+  else process.env.DSH_HOME = previousHome
+  previousHome = undefined
   if (root !== undefined) await rm(root, { recursive: true, force: true })
   root = undefined
 })
@@ -32,6 +36,10 @@ afterEach(async () => {
 /** Write a dist fixture and the authenticated Web rows, then boot them through the real Loader. */
 async function loadComposition(): Promise<Context> {
   root = await mkdtemp(join(tmpdir(), 'dsh-frontend-static-'))
+  // Connection activation records the durable launch token under $DSH_HOME;
+  // keep that beside the composition's throwaway credentials file.
+  previousHome = process.env.DSH_HOME
+  process.env.DSH_HOME = root
   const dist = join(root, 'dist')
   await mkdir(dist)
   const distIndex = join(dist, 'index.html')
