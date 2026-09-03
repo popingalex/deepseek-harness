@@ -782,7 +782,9 @@ describe('Session', () => {
     const session = Session.create(SessionId('append-ignorable'))
     const event = session.append('todo/write', { todos: [] }, { ignorable: true })
     expect(event.ignorable).toBe(true)
-    expect(session.events[0]?.ignorable).toBe(true)
+    // EH fork fix (upstream rc.1 blind spot): `Session.events` accessor no
+    // longer exists; snapshotEvents() is the same file's canonical read.
+    expect(session.snapshotEvents()[0]?.ignorable).toBe(true)
   })
 
   it('reads a nested append-data getter once and stores its first JSON value', () => {
