@@ -154,10 +154,10 @@ describe('render branch tails', () => {
         useInput={(() => { throw new Error('unused') })}
         inputActions={{
           setDraft: () => {},
-          addImages: () => true,
+          addAttachments: () => true,
           appendReference: () => true,
-          removeImage: () => {},
-          pruneImages: () => {},
+          removeAttachment: () => {},
+          pruneAttachments: () => {},
           submit: () => {},
         }}
         useStore={bindSnapshotSelector(chat)}
@@ -217,10 +217,10 @@ describe('render branch tails', () => {
         useInput={(() => { throw new Error('unused') })}
         inputActions={{
           setDraft: () => {},
-          addImages: () => true,
+          addAttachments: () => true,
           appendReference: () => true,
-          removeImage: () => {},
-          pruneImages: () => {},
+          removeAttachment: () => {},
+          pruneAttachments: () => {},
           submit: () => {},
         }}
         useStore={bindSnapshotSelector(chat)}

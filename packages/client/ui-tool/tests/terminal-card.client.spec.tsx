@@ -526,8 +526,9 @@ describe('DetailsPanel Output section', () => {
         useTrajectory={useEmptyTrajectory}
         useInput={(() => { throw new Error('unused') })}
         inputActions={{
-          setDraft: () => {}, addImages: () => true, appendReference: () => true,
-          removeImage: () => {}, pruneImages: () => {}, submit: () => {},
+          setDraft: () => {}, addAttachments: () => true, removeAttachment: () => {},
+          appendReference: () => true,
+          pruneAttachments: () => {}, submit: () => {},
         }}
         useProjection={(() => undefined)}
         useStore={bindSnapshotSelector(chat)}
@@ -717,8 +718,9 @@ describe('DetailsPanel Output section', () => {
         useTrajectory={useEmptyTrajectory}
         useInput={(() => { throw new Error('unused') })}
         inputActions={{
-          setDraft: () => {}, addImages: () => true, appendReference: () => true,
-          removeImage: () => {}, pruneImages: () => {}, submit: () => {},
+          setDraft: () => {}, addAttachments: () => true, removeAttachment: () => {},
+          appendReference: () => true,
+          pruneAttachments: () => {}, submit: () => {},
         }}
         useProjection={(() => undefined)}
         useStore={bindSnapshotSelector(chat)}
