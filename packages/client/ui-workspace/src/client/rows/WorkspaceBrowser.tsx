@@ -9,7 +9,7 @@
  * menu in between; the flow and its error dialog live in WorkspacePicker
  * (same package — direct composition, no slot between them).
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconCloseFill14, IconPersonalizationOutline16,
@@ -21,7 +21,7 @@ import type {
 import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceBrowserProps } from '../contract/slots.ts'
-import type { SessionNode, SessionOrderBy } from '../tree.ts'
+import type { SessionNode, SessionOrderBy, TeamGroupInfo } from '../tree.ts'
 import {
   deriveFlat, deriveGroups, deriveSearchResults, owningGroupKey, UNGROUPED_KEY,
 } from '../tree.ts'
@@ -235,7 +235,7 @@ function workspaceGroupHalf(e: { clientY: number; currentTarget: HTMLElement }):
 type SessionTreeProps = Pick<
   WorkspaceBrowserProps,
   'useSessions' | 'useSessionPendingInteraction' | 'startSession' | 'open' | 'forkSession'
-  | 'insertWorkspaceBefore' | 'insertSessionBefore' | 't'
+  | 'insertWorkspaceBefore' | 'insertSessionBefore' | 'sessionGrouping' | 'renderSlot' | 't'
 > & {
   /** Host account home for POSIX hover-path abbreviation. */
   home?: string | undefined
@@ -272,6 +272,16 @@ type SessionTreeProps = Pick<
   onSessionRevealed: (sessionId: SessionId) => void
 }
 
+/** Team/event classification for one row, narrowed out of the grouping union
+ * (EH replay 74b6b95354). Role rows resolve their own tokens via `node.teamRole`. */
+function teamInfoOf(
+  sessionGrouping: WorkspaceBrowserProps['sessionGrouping'],
+  id: string,
+): TeamGroupInfo | undefined {
+  const info = sessionGrouping?.(id)
+  return info !== null && info !== undefined && info.kind !== 'role' ? info : undefined
+}
+
 /** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
 function SessionTree({
   useSessions, useSessionPendingInteraction, startSession, open, forkSession, workspaces, archivedSessionIds,
@@ -281,6 +291,7 @@ function SessionTree({
   groupExpansion, setGroupExpanded,
   sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, home, t,
   revealSessionId, onSessionRevealed,
+  sessionGrouping, renderSlot,
 }: SessionTreeProps) {
   const list = useSessions(s => s)
   const pendingInteractions = useSessionPendingInteraction(s => s)
@@ -356,8 +367,8 @@ function SessionTree({
       ...(sessionOrderByAccount[UNGROUPED_KEY] === undefined
         ? {}
         : { ungroupedOrder: sessionOrderByAccount[UNGROUPED_KEY] }),
-    }),
-    [list, orderedWorkspaces, archivedSessionIds, pendingInteractions, expandedGroups, sessionOrderByAccount],
+    }, undefined, sessionGrouping),
+    [list, orderedWorkspaces, archivedSessionIds, pendingInteractions, expandedGroups, sessionOrderByAccount, sessionGrouping],
   )
   useEffect(() => {
     if (revealGroup === undefined || groupExpansion[revealGroup] === true) return
@@ -578,21 +589,57 @@ function SessionTree({
                   },
                 }
                 return (
-                  <SessionNodeItem
-                    key={node.id}
-                    node={node}
-                    currentId={current}
-                    now={now}
-                    onOpen={open}
-                    onRename={onSessionRename}
-                    onFork={forkSession}
-                    onArchive={onSessionArchive}
-                    onReveal={node.id === revealSessionId && group.key === revealGroup
-                      ? () => { onSessionRevealed(node.id) }
-                      : undefined}
-                    drag={dragProps}
-                    t={t}
-                  />
+                  <Fragment key={node.id}>
+                    <SessionNodeItem
+                      key={node.id}
+                      node={node}
+                      currentId={current}
+                      now={now}
+                      onOpen={open}
+                      onRename={onSessionRename}
+                      onFork={forkSession}
+                      onArchive={onSessionArchive}
+                      onReveal={node.id === revealSessionId && group.key === revealGroup
+                        ? () => { onSessionRevealed(node.id) }
+                        : undefined}
+                      groupInfo={teamInfoOf(sessionGrouping, node.id as string)}
+                      groupingActive={sessionGrouping !== undefined}
+                      expand={node.children !== undefined && node.children.length > 0
+                        ? {
+                          // Team member expansion shares the persisted group
+                          // expansion account under `team:<id>` (09 §5).
+                          expanded: node.childrenExpanded === true,
+                          onToggle: () => { setGroupExpanded(`team:${node.id as string}`, node.childrenExpanded !== true) },
+                        }
+                        : undefined}
+                      drag={dragProps}
+                      renderSlot={renderSlot}
+                      t={t}
+                    />
+                    {/* EH replay 74b6b95354: role member rows render inline under
+                        their team row while the persisted `team:<id>` expansion
+                        is open; the grouping provider owns every display token. */}
+                    {node.childrenExpanded === true && node.children !== undefined && node.children.length > 0 && (
+                      <div className={css.memberRows}>
+                        {node.children.map(child => (
+                          <SessionNodeItem
+                            key={child.id}
+                            node={child}
+                            currentId={current}
+                            now={now}
+                            onOpen={open}
+                            onRename={onSessionRename}
+                            onFork={forkSession}
+                            onArchive={onSessionArchive}
+                            groupInfo={teamInfoOf(sessionGrouping, child.id as string)}
+                            groupingActive={sessionGrouping !== undefined}
+                            renderSlot={renderSlot}
+                            t={t}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </Fragment>
                 )
               })}
               {collapsed.hiddenCount > 0 && (
@@ -854,6 +901,7 @@ export function WorkspaceBrowser({
   useDirectoryFlow,
   useHostInfo,
   renderSlot,
+  sessionGrouping,
   t,
 }: WorkspaceBrowserProps) {
   const home = useHostInfo(info => info.home)
@@ -1302,6 +1350,8 @@ export function WorkspaceBrowser({
                 orderBy={orderBy}
                 revealSessionId={revealSessionId}
                 onSessionRevealed={acknowledgeSessionReveal}
+                sessionGrouping={sessionGrouping}
+                renderSlot={renderSlot}
                 home={home}
                 t={t}
                 onRenameRequest={(workspaceId, currentTitle) => {

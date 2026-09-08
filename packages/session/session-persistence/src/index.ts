@@ -20,6 +20,7 @@ export type {
   SessionHandleAppendOptions,
   SessionHandleFlushOptions,
   SessionHandleReadOptions,
+  SessionHandleReadResult,
 } from './handle.ts'
 export {
   SessionAlreadyExistsError,
@@ -166,6 +167,8 @@ export abstract class SessionPersistence extends Service {
    * reset). The default refuses: backends with per-session artifacts that
    * support in-place replacement override it. Callers are responsible for
    * removing the physical artifact before a replacement session is announced.
+   * @param _id - session whose persistence state would be forgotten; unused by
+   *   the default refusal.
    */
   async reset(_id: SessionId): Promise<void> {
     throw new Error('this session persistence backend does not support reset')
