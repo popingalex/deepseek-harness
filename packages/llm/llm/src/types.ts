@@ -106,6 +106,21 @@ export interface ToolResultBlock {
 }
 
 /**
+ * First-class engineering-object reference block (req 090802 P4 / 090803 R1).
+ *
+ * `ref` is a canonical ObjectRef string (`kind:id`, facts may pin `@vN`);
+ * `snapshot` is the message-time projection and must never be rewritten.
+ * Producers: EH `conversation_compose`. Adapter projection degrades the block
+ * to its EH_REF_V2 text token (model requests carry text only); UI renders the
+ * block as a chip (Inline = snapshot, Hover/Sidebar = live resolve).
+ */
+export interface ObjectRefBlock {
+  type: 'object-ref'
+  ref: string
+  snapshot?: Record<string, unknown>
+}
+
+/**
  * Merge-extensible content blocks keyed by `type`. New core blocks must land
  * with adapter, UI, and compaction support.
  */
@@ -116,6 +131,7 @@ export interface ContentBlockMap {
   'file': FileBlock
   'tool-call': ToolCallBlock
   'tool-result': ToolResultBlock
+  'object-ref': ObjectRefBlock
 }
 
 /** The block `type` tag vocabulary; widens as plugins add entries to {@link ContentBlockMap}. */
