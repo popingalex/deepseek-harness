@@ -6,6 +6,7 @@
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ToolCallId, ProviderRequestId, ReasoningEffortId } from './brand.ts'
 import type { Message } from './message.ts'
 
@@ -117,7 +118,8 @@ export interface ToolResultBlock {
 export interface ObjectRefBlock {
   type: 'object-ref'
   ref: string
-  snapshot?: Record<string, unknown>
+  /** Message-time chip projection (JSON-shaped; typert remote boundaries refuse unconstrained `unknown`). */
+  snapshot?: { [key: string]: JsonValue }
 }
 
 /**

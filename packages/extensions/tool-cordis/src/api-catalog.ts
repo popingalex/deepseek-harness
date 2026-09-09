@@ -3893,7 +3893,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ContentBlockMap',
-    declaration: 'export interface ContentBlockMap {\n    \'text\': TextBlock;\n    \'reasoning\': ReasoningBlock;\n    \'image\': ImageBlock;\n    \'file\': FileBlock;\n    \'tool-call\': ToolCallBlock;\n    \'tool-result\': ToolResultBlock;\n}',
+    declaration: 'export interface ContentBlockMap {\n    \'text\': TextBlock;\n    \'reasoning\': ReasoningBlock;\n    \'image\': ImageBlock;\n    \'file\': FileBlock;\n    \'tool-call\': ToolCallBlock;\n    \'tool-result\': ToolResultBlock;\n    \'object-ref\': ObjectRefBlock;\n}',
   },
   {
     name: 'ContentBlockType',
@@ -4714,6 +4714,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ObjectJsonSchema',
     declaration: 'export type ObjectJsonSchema = JsonSchemaNode & {\n    type: \'object\';\n};',
+  },
+  {
+    name: 'ObjectRefBlock',
+    declaration: 'export interface ObjectRefBlock {\n    type: \'object-ref\';\n    ref: string;\n    snapshot?: {\n        [key: string]: JsonValue;\n    };\n}',
   },
   {
     name: 'OneShotSubagentDescriptorData',
