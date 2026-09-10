@@ -235,7 +235,7 @@ function workspaceGroupHalf(e: { clientY: number; currentTarget: HTMLElement }):
 type SessionTreeProps = Pick<
   WorkspaceBrowserProps,
   'useSessions' | 'useSessionPendingInteraction' | 'startSession' | 'open' | 'forkSession'
-  | 'insertWorkspaceBefore' | 'insertSessionBefore' | 'sessionGrouping' | 'renderSlot' | 't' | 'usePanelInfo'
+  | 'insertWorkspaceBefore' | 'insertSessionBefore' | 'sessionGrouping' | 'sessionVisibility' | 'renderSlot' | 't' | 'usePanelInfo'
 > & {
   /** Host account home for POSIX hover-path abbreviation. */
   home?: string | undefined
@@ -291,7 +291,7 @@ function SessionTree({
   groupExpansion, setGroupExpanded,
   sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, home, t,
   revealSessionId, onSessionRevealed,
-  sessionGrouping, renderSlot,
+  sessionGrouping, sessionVisibility, renderSlot,
 }: SessionTreeProps) {
   const panelActive = usePanelInfo(info => info.activePanelId !== null)
   const list = useSessions(s => s)
@@ -368,8 +368,11 @@ function SessionTree({
       ...(sessionOrderByAccount[UNGROUPED_KEY] === undefined
         ? {}
         : { ungroupedOrder: sessionOrderByAccount[UNGROUPED_KEY] }),
-    }, undefined, sessionGrouping),
-    [list, orderedWorkspaces, archivedSessionIds, pendingInteractions, expandedGroups, sessionOrderByAccount, sessionGrouping],
+    }, sessionVisibility, sessionGrouping),
+    [
+      list, orderedWorkspaces, archivedSessionIds, pendingInteractions,
+      expandedGroups, sessionOrderByAccount, sessionGrouping, sessionVisibility,
+    ],
   )
   useEffect(() => {
     if (revealGroup === undefined || groupExpansion[revealGroup] === true) return
@@ -908,6 +911,7 @@ export function WorkspaceBrowser({
   useHostInfo,
   renderSlot,
   sessionGrouping,
+  sessionVisibility,
   t,
 }: WorkspaceBrowserProps) {
   const home = useHostInfo(info => info.home)
@@ -1360,6 +1364,7 @@ export function WorkspaceBrowser({
                 revealSessionId={revealSessionId}
                 onSessionRevealed={acknowledgeSessionReveal}
                 sessionGrouping={sessionGrouping}
+                sessionVisibility={sessionVisibility}
                 renderSlot={renderSlot}
                 home={home}
                 t={t}

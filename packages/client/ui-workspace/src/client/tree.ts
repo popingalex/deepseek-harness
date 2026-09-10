@@ -205,10 +205,12 @@ function sessionVisible(
 /**
  * A blank session is the selected Workspace's provisional New Session row;
  * its canonical title never enters search (blank rows are query-excluded)
- * and the renderer localizes its display label.
+ * and the renderer localizes its display label — unless the user already set
+ * a durable title (e.g. renamed slot), which must surface while still blank.
  */
 function sessionTitle(session: SessionSummary): string {
-  return session.blank ? '' : session.displayTitle
+  if (session.blank) return session.title ?? ''
+  return session.displayTitle
 }
 
 /** The list projection alone owns the best-effort active-Schedule indicator. */

@@ -21,9 +21,11 @@ import css from './Rows.module.css'
 /** The standard locale seat, prop-passed from the browser root. */
 type RowTranslate = WorkspaceBrowserProps['t']
 
-/** Row display title: blank rows show the localized New Session label. */
+/** Row display title: untitled blanks use the localized New Session label;
+ *  a durable rename on a blank slot keeps that title visible. */
 function displayTitle(node: SessionNode, t: RowTranslate): string {
-  return node.blank ? t('session.new') : node.title
+  if (node.blank && node.title === '') return t('session.new')
+  return node.title === '' ? t('session.new') : node.title
 }
 
 /** Localized compact relative time ("刚刚"/"5分钟" in zh, "now"/"5min" in en). */
