@@ -20,6 +20,7 @@ import type {} from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: pulls the SlotRegistry service merge (ctx.slots).
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 // Type-only: pulls the Session root standard-hook merge.
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from './contract/slots.ts'
@@ -60,7 +61,7 @@ const NS = 'workspace'
  * declaration through `slots.inject()` instead of assuming order.
  */
 export const inject = [
-  'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker',
+  'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'layout',
 ]
 
 /**
@@ -95,11 +96,14 @@ export function apply(ctx: Context): void {
     subscribe: listener => ctx.on('connection/reset', listener),
   }
   const pickerFlowSource = flowSource('conversation.hero.workspace.directoryFlow')
+  const openSession: WorkspaceBrowserInjected['open'] = (sessionId) => {
+    uiWorkspace.openSession(sessionId)
+  }
   const browserInjected = (): WorkspaceBrowserInjected => ({
     // Explicit group actions keep their target; unscoped New Session inherits
     // the current Session Workspace before the recent-Workspace fallback.
     startSession: (workspaceId) => { uiWorkspace.startSession(workspaceId) },
-    open: (sessionId) => { sessions.open(sessionId) },
+    open: openSession,
     // EH 集成软服务（req 082704 合并重放）：可见性判定/团队分组/行投影/
     // 会话创建入口由 situation-view 等插件按需 provide，缺席时 undefined。
     sessionVisibility: (ctx.get as (key: string) => unknown | undefined)?.('sessionVisibility') as WorkspaceBrowserInjected['sessionVisibility'],
@@ -117,8 +121,7 @@ export function apply(ctx: Context): void {
       if (!result.ok) throw new Error(result.error.message)
     },
     forkSession: (sessionId) => {
-      sessions.fork({ sessionId, increaseTitle: true })
-        .then((childId) => { sessions.open(childId) })
+      uiWorkspace.forkSession(sessionId)
         .catch(() => {
           // Fork or child-rename failure keeps the current selection.
         })
