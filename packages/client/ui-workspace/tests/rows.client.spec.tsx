@@ -587,17 +587,31 @@ describe('workspace browser rows', () => {
       // "now" stamp.
       expect(screen.queryByRole('button', { name: /会话.*的操作/ })).toBeTruthy()
       expect(screen.queryByText('刚刚')).toBeNull()
+      // A durable rename on a blank slot keeps that title visible (row +
+      // hover card) rather than being masked by the New Session label.
+      expect(screen.getAllByText('ignored').length).toBeGreaterThanOrEqual(1)
+      expect(screen.queryByText('新会话')).toBeNull()
       // The hover card keeps title + status but drops the timestamp line.
       const wrapper = screen.getByRole('treeitem').parentElement as HTMLElement
       fireEvent.pointerEnter(wrapper)
       act(() => { vi.advanceTimersByTime(500) })
-      expect(screen.getAllByText('新会话').length).toBeGreaterThanOrEqual(2)
+      expect(screen.getAllByText('ignored').length).toBeGreaterThanOrEqual(2)
       expect(screen.getByText('空闲')).toBeTruthy()
       expect(screen.queryByText('刚刚')).toBeNull()
       expect(screen.getByText('空闲').closest('[role="button"]')).toBeNull()
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('an untitled blank slot still shows the localized New Session label', () => {
+    const node: SessionNode = {
+      id: sid('s-untitled-blank'), title: '', blank: true, running: false,
+      runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 0,
+    }
+    render(<SessionNodeItem node={node} currentId={node.id} now={0} onOpen={vi.fn()}
+      onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />)
+    expect(screen.getAllByText('新会话').length).toBeGreaterThanOrEqual(1)
   })
 
   it('session row menu opens without opening the session and dispatches rename, fork, and archive', () => {
