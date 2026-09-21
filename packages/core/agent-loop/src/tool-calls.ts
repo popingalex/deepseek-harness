@@ -14,8 +14,31 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { createToolResultMessage, type ToolCallBlock } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionSeq, UserMessage } from '@deepseek-ai/dsh-session'
-import { TOOL_ABORTED_BEFORE_DISPATCH, TOOL_RUNTIME_SCHEDULER, type ToolExecutionInput, type ToolExecutionMode, type ToolExecutionResult, type ToolRunContext } from '@deepseek-ai/dsh-tools'
+import { TOOL_ABORTED_BEFORE_DISPATCH, TOOL_RUNTIME_SCHEDULER, type ToolExecutionInput, type ToolExecutionMode, type ToolExecutionResult, type ToolRunContext, type ToolRuntimeScheduler } from '@deepseek-ai/dsh-tools'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
+
+/**
+ * req 0921-dh 根治「reading 'prepare'」崩溃：dev(tsx 跑 src) 与插件(lib) 可能各自
+ * 实例化 @deepseek-ai/dsh-tools，两份 module 的 scheduler symbol 同描述不同实例，
+ * 直接用本实例 symbol 读 ctx.tools 会得到 undefined。按 description 从 ctx.tools
+ * 上解析真实存在的 scheduler symbol，本实例 symbol 仅作兜底——访问点从此实例无关。
+ */
+const SCHEDULER_SYMBOL_DESCRIPTION = '@deepseek-ai/dsh-tools.scheduler'
+
+function schedulerOf(tools: unknown): ToolRuntimeScheduler {
+  if (tools !== null && typeof tools === 'object') {
+    for (const symbol of Object.getOwnPropertySymbols(tools)) {
+      if (symbol.description === SCHEDULER_SYMBOL_DESCRIPTION) {
+        return (tools as Record<symbol, ToolRuntimeScheduler>)[symbol]
+      }
+    }
+  }
+  const fallback = (tools as Record<symbol, ToolRuntimeScheduler>)[TOOL_RUNTIME_SCHEDULER]
+  if (fallback === undefined) {
+    throw new Error(`agent-loop: ctx.tools 没有 scheduler（symbol "${SCHEDULER_SYMBOL_DESCRIPTION}" 与本实例 symbol 均未命中）`)
+  }
+  return fallback
+}
 
 /** One tool call after argument parsing, ready to schedule. */
 interface PlannedCall {
@@ -150,8 +173,8 @@ async function runGroup(
       if (slot === undefined) break
       const call = group[committed]
       const result = slot.needsPost
-        ? await ctx.tools[TOOL_RUNTIME_SCHEDULER].finalize(slot.exec, slot.result)
-        : ctx.tools[TOOL_RUNTIME_SCHEDULER].finish(slot.exec, slot.result)
+        ? await schedulerOf(ctx.tools).finalize(slot.exec, slot.result)
+        : schedulerOf(ctx.tools).finish(slot.exec, slot.result)
       // oxlint-disable-next-line typescript/no-non-null-assertion -- bounded index
       appendToolResult(session, turn, step, call!.block, result, callSeqs[committed]!)
       for (const context of result.additionalContexts ?? []) acceptContext(context)
@@ -167,11 +190,11 @@ async function runGroup(
     const call = group[index]!
     callSeqs[index] = appendToolCall(session, turn, step, call.block)
     started++
-    const prepared = await ctx.tools[TOOL_RUNTIME_SCHEDULER].prepare(call.exec)
+    const prepared = await schedulerOf(ctx.tools).prepare(call.exec)
     throwSchedulerFailure()
     switch (prepared.kind) {
       case 'dispatch': {
-        const promise = ctx.tools[TOOL_RUNTIME_SCHEDULER].dispatch(prepared.exec).then(
+        const promise = schedulerOf(ctx.tools).dispatch(prepared.exec).then(
           (outcome) => {
             slots[index] = { exec: prepared.exec, result: outcome.result, needsPost: outcome.kind === 'post-result' }
             return index
