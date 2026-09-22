@@ -17,7 +17,7 @@
 export interface TextRefRange {
   readonly start: number
   readonly end: number
-  readonly trigger: '/' | '@' | '#'
+  readonly trigger: '/' | '@'
 }
 
 /** Token matcher: a trigger char at line start or after whitespace, then a word-ish name (never crosses \n). */
@@ -41,7 +41,7 @@ const SLASH_TOKEN_END_RE = /^(?:\s|$)/
  * @returns matched ranges in draft order.
  */
 export function scanTextRefs(
-  draft: string, lexicon: ReadonlyMap<'/' | '@' | '#', readonly string[]>,
+  draft: string, lexicon: ReadonlyMap<'/' | '@', readonly string[]>,
 ): TextRefRange[] {
   if (draft === '') return []
   const out: TextRefRange[] = []
@@ -49,7 +49,7 @@ export function scanTextRefs(
     TEXT_REF_RE.lastIndex = 0
     let m: RegExpExecArray | null
     while ((m = TEXT_REF_RE.exec(draft)) !== null) {
-      const trigger = m[2] as '/' | '@' | '#'
+      const trigger = m[2] as '/' | '@'
       const name = m[3] ?? ''
       if (trigger === '/' && !SLASH_TOKEN_END_RE.test(draft.slice(m.index + m[0].length))) continue
       if (lexicon.get(trigger)?.includes(name)) {

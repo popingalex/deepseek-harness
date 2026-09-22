@@ -92,7 +92,7 @@ function projectionContentChanged(prev: EditorProjection, next: EditorProjection
 const EMPTY_QUEUE: InboxState['next-turn'] = []
 
 /** No-pipeline lexicon: zero text-ref decorations. */
-const EMPTY_LEXICON: ReadonlyMap<'/' | '@' | '#', readonly string[]> = new Map()
+const EMPTY_LEXICON: ReadonlyMap<'/' | '@', readonly string[]> = new Map()
 
 /** Editor and attachment snapshot owned by one detached default send. */
 interface DetachedDraft {
@@ -128,6 +128,8 @@ export class SessionInputShell implements SessionInput {
     removeAttachment: (id) => { this.removeAttachment(id) },
     pruneAttachments: (ids) => { this.pruneAttachments(ids) },
     submit: () => { this.submit('queue') },
+    // EH：事件桥引用插入（browser-studio 网页元素 / situation-view 引用组）。
+    // 上游 InputActions 无此动作；draft 末尾原位铸造内联引用 token。
     appendReference: (reference) => {
       const end = this.snapshot.draft.length
       return this.insertReference(reference, { start: end, end, draftRev: this.snapshot.draftRev })
@@ -386,7 +388,7 @@ export class SessionInputShell implements SessionInput {
    * identity per shell; without a pipeline the snapshot is the empty Map and
    * subscribers never fire.
    */
-  readonly lexicon: ObservableSnapshot<ReadonlyMap<'/' | '@' | '#', readonly string[]>> = {
+  readonly lexicon: ObservableSnapshot<ReadonlyMap<'/' | '@', readonly string[]>> = {
     getSnapshot: () => this.deps.inputTriggers?.()?.lexicon.getSnapshot() ?? EMPTY_LEXICON,
     subscribe: fn => this.deps.inputTriggers?.()?.lexicon.subscribe(fn) ?? (() => {}),
   }

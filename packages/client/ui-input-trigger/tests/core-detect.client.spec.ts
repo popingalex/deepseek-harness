@@ -18,7 +18,6 @@ describe('detectTrigger word boundaries', () => {
   it('triggers at start of draft', () => {
     expect(atEnd('/go')).toMatchObject({ trigger: '/', query: 'go', position: 'leading' })
     expect(atEnd('@wo')).toMatchObject({ trigger: '@', query: 'wo', position: 'leading' })
-    expect(atEnd('#asset')).toMatchObject({ trigger: '#', query: 'asset', position: 'leading' })
   })
 
   it('triggers after whitespace, newline, and punctuation', () => {
