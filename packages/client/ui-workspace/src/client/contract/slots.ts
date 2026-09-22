@@ -105,9 +105,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     /** Session-row lead badge: plugin renders a compact marker/avatars before
      * the session title (e.g. Emergency Harness team sessions show 🛡 + roles).
      * Declared by the WorkspaceBrowser entry; a composition with no occupant
-     * simply shows the plain title. session-maybe scope: the row is rendered
-     * outside a session area (sidebar), so no SessionProvider is injected. */
-    'sidebar.session.badge': { kind: 'single'; scope: 'session-maybe'; owner: { sessionId: SessionId; title: string } }
+     * simply shows the plain title. root scope: the row lives in the sidebar,
+     * outside any session area, so no SessionProvider is injected. */
+    'sidebar.session.badge': { kind: 'single'; scope: 'root'; owner: { sessionId: SessionId; title: string } }
     /** Session-list create entry: a plugin may add its own session-kind
      * creation button in the sidebar header (e.g. Emergency Harness 团队会话
      * next to the standard New Session). list kind so several plugins can

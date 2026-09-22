@@ -262,7 +262,7 @@ export function apply(ctx: Context): void {
           kind: 'list', scope: 'root', inject: { hooks: { menuOpenState: menuOpenStateFactory } },
         },
         'sidebar.workspaces.session.row.action': { kind: 'list', scope: 'root' },
-        'sidebar.session.badge': { kind: 'single', scope: 'session-maybe' },
+        'sidebar.session.badge': { kind: 'single', scope: 'root' },
         'sidebar.session.create': { kind: 'list', scope: 'root' },
       },
       store: viewStore,

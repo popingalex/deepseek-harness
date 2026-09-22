@@ -641,7 +641,7 @@ export function SessionNodeItem({
   /** Team member-list toggle; absent when the session has no members to show. */
   expand?: { expanded: boolean; onToggle: () => void } | undefined
   t: RowTranslate
-} & PropsRenderSlots<'sidebar.workspaces.session.menu.item' | 'sidebar.workspaces.session.row.action'>) {
+} & PropsRenderSlots<'sidebar.workspaces.session.menu.item' | 'sidebar.workspaces.session.row.action' | 'sidebar.session.badge'>) {
   const row = node
   // Grouped rows keep a real label even while blank: the generic
   // "New Session" placeholder would otherwise mislabel a grouped draft (e.g.

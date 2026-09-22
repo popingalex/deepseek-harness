@@ -93,7 +93,7 @@ describe('workspace browser rows', () => {
   it('marks standard and emergency-team rows without rendering member avatars', () => {
     const node: SessionNode = {
       id: sid('team'), title: 'Response Team', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 0,
+      runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 0, pinned: false, archived: false,
     }
     const team = group('team', [
       { displayName: '现场指挥员', roleName: '指挥协调', status: 'online' },
@@ -113,7 +113,7 @@ describe('workspace browser rows', () => {
   it('renders a local calendar svg for event sessions in the session-kind slot', () => {
     const node: SessionNode = {
       id: sid('event'), title: 'Event Session', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 0,
+      runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 0, pinned: false, archived: false,
     }
     const view = render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
       groupInfo={group('event')} groupingActive t={t} />)
@@ -128,6 +128,7 @@ describe('workspace browser rows', () => {
       const node: SessionNode = {
         id: sid('team'), title: 'Response Team', blank: false, running: false,
         runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 0,
+        pinned: false, archived: false,
       }
       const metadata = group('team', [{ displayName: '现场指挥员', roleName: '指挥协调', status: 'online' }])
       render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
@@ -150,7 +151,7 @@ describe('workspace browser rows', () => {
   it('flips the keyboard-focus member panel left near the right viewport edge', () => {
     const node: SessionNode = {
       id: sid('team'), title: 'Response Team', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 0,
+      runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 0, pinned: false, archived: false,
     }
     const metadata = group('team', [{ displayName: '现场指挥员', roleName: '指挥协调', status: 'online' }])
     render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
@@ -168,7 +169,7 @@ describe('workspace browser rows', () => {
   it('ignores keyboard focus on rows without emergency participants', () => {
     const node: SessionNode = {
       id: sid('plain'), title: 'Plain', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 0,
+      runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 0, pinned: false, archived: false,
     }
     render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />)
     fireEvent.focus(screen.getByRole('treeitem'))
@@ -179,6 +180,7 @@ describe('workspace browser rows', () => {
     const feed: SessionNode = {
       id: sid('feed'), title: 'Feed', blank: false, running: false,
       runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 0,
+      pinned: false, archived: false,
       teamRole: { kind: 'feed' },
     }
     const view = render(<SessionNodeItem node={feed} currentId={undefined} now={0} onOpen={vi.fn()} t={t} />)
@@ -200,7 +202,7 @@ describe('workspace browser rows', () => {
   it('toggles the member list from its chevron without opening the session', () => {
     const node: SessionNode = {
       id: sid('team'), title: 'Response Team', blank: false, running: false,
-      runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 0,
+      runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 0, pinned: false, archived: false,
     }
     const onToggle = vi.fn()
     const onOpen = vi.fn()
@@ -215,7 +217,7 @@ describe('workspace browser rows', () => {
   it('an untitled blank slot still shows the localized New Session label', () => {
     const node: SessionNode = {
       id: sid('s-untitled-blank'), title: '', blank: true, running: false,
-      runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 0,
+      runningSubagentCount: 0, completed: false, hasActiveSchedule: false, updatedAt: 0, pinned: false, archived: false,
     }
     render(<SessionNodeItem node={node} currentId={node.id} now={0} onOpen={vi.fn()} t={t} />)
     expect(screen.getAllByText('新会话').length).toBeGreaterThanOrEqual(1)

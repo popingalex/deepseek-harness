@@ -1392,7 +1392,6 @@ export function WorkspaceBrowser({
                 onSessionRevealed={acknowledgeSessionReveal}
                 sessionGrouping={sessionGrouping}
                 sessionVisibility={sessionVisibility}
-                renderSlot={renderSlot}
                 home={home}
                 t={t}
                 onRenameRequest={(workspaceId, currentTitle) => {

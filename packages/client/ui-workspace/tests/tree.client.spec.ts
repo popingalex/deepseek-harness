@@ -551,7 +551,7 @@ describe('deriveGroups', () => {
       return undefined
     }
     const groups = deriveGroups(
-      sessions, [workspace('first', ['blank', 'plain'])], noArchive, noAttention, view(['first']), resolver,
+      sessions, [workspace('first', ['blank', 'plain'])], noRows, noAttention, view(['first']), resolver,
     )
     expect(groups[0]!.sessions.map(node => node.id)).toEqual([blank.id])
   })
