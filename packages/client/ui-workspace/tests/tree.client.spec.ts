@@ -572,7 +572,7 @@ describe('deriveGroups team member nesting (09 §5)', () => {
       'role-a': roleInfo('team', 'commander'),
     })
     const groups = deriveGroups(
-      sessions, [workspace('first', ['team', 'role-a', 'plain'])], noArchive, noAttention, view(['first']), undefined, grouping,
+      sessions, [workspace('first', ['team', 'role-a', 'plain'])], noRows, noAttention, view(['first']), undefined, grouping,
     )
     // No top-level team pseudo-group; the team session stays inside its Workspace group.
     expect(groups.map(group => group.key)).toEqual(['first'])
@@ -595,7 +595,7 @@ describe('deriveGroups team member nesting (09 §5)', () => {
       'role-a': roleInfo('team', 'commander'),
     })
     const groups = deriveGroups(
-      sessions, [workspace('first', ['team', 'role-a'])], noArchive, noAttention, view(['first', 'team:team']), undefined, grouping,
+      sessions, [workspace('first', ['team', 'role-a'])], noRows, noAttention, view(['first', 'team:team']), undefined, grouping,
     )
     expect(groups[0]!.sessions[0]!.childrenExpanded).toBe(true)
     expect(groups[0]!.sessions[0]!.children?.map(node => node.id)).toEqual([sid('role-a')])
@@ -611,7 +611,7 @@ describe('deriveGroups team member nesting (09 §5)', () => {
       'role-archived': roleInfo('team', 'archived'),
     })
     const groups = deriveGroups(
-      sessions, [workspace('first', ['team'])], archived('role-archived'), noAttention,
+      sessions, [workspace('first', ['team'])], rowState({ archived: ['role-archived'] }), noAttention,
       view(['first', UNGROUPED_KEY]), undefined, grouping,
     )
     // A memberless team row keeps an empty children list (the renderer hides
@@ -628,7 +628,7 @@ describe('deriveGroups team member nesting (09 §5)', () => {
       'role-a': roleInfo('team', 'commander'),
     })
     const groups = deriveGroups(
-      sessions, [workspace('first', ['team'])], noArchive, noAttention, view(['first', UNGROUPED_KEY]), undefined, grouping,
+      sessions, [workspace('first', ['team'])], noRows, noAttention, view(['first', UNGROUPED_KEY]), undefined, grouping,
     )
     expect(groups.map(group => group.key)).toEqual(['first', UNGROUPED_KEY])
     expect(groups[1]!.sessions.map(node => node.id)).toEqual([sid('loose')])

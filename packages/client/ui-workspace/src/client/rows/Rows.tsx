@@ -649,7 +649,7 @@ export function SessionNodeItem({
   // the grouping provider; plain rows keep the native blank placeholder.
   const isGroupedRow = groupInfo !== undefined
   const title = node.teamRole?.kind === 'feed'
-    ? groupInfo?.label ?? displayTitle(node, t)
+    ? '🌐 团队公共流'
     : node.teamRole?.kind === 'role'
       ? node.teamRole.displayName
       : (node.blank && isGroupedRow && groupInfo.label !== undefined)
@@ -776,7 +776,8 @@ export function SessionNodeItem({
           )}
         </span>
       )}
-      {renderSlot('sidebar.session.badge', { sessionId: node.id, title })}
+      {!(row.blank && groupInfo === undefined)
+        && renderSlot('sidebar.session.badge', { sessionId: node.id, title })}
       <span
         ref={titleRef}
         className={css.title}

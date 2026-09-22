@@ -33,7 +33,7 @@ import type { WorkspaceBrowserProps } from '../contract/slots.ts'
 import type { ArchivedFilter, GroupNode, SessionNode, SessionOrderBy, SessionRowState, TeamGroupInfo } from '../tree.ts'
 import {
   deriveFlat, deriveGroups, deriveSearchResults, orderByRecency, owningGroupKey, owningParentFolder,
-  pinCurrentBlank, reconcileManualOrder, UNGROUPED_KEY,
+  pinCurrentBlank, reconcileManualOrder, UNGROUPED_KEY, visibleSessionIds,
 } from '../tree.ts'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './Rows.tsx'
 import { AnimatedRows } from './AnimatedRows.tsx'
@@ -593,6 +593,7 @@ function SessionTree({
                       onRenameRequest={onSessionRenameRequest}
                       groupInfo={teamInfoOf(sessionGrouping, child.id as string)}
                       groupingActive={sessionGrouping !== undefined}
+                      renderSlot={renderSlot}
                       t={t}
                     />
                   ))}
