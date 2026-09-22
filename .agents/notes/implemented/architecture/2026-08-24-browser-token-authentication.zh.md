@@ -14,7 +14,7 @@ Web Host 以当前操作系统用户的权限运行具有工具能力的 Session
 
 每个 Harness home 在签名密钥旁保留一个持久启动令牌，重启时复用而非轮换：操作者与脚本用同一个稳定 URL 访问服务器，并从固定文件读取令牌。Connection 在热重载与进程重启之间复用同一令牌；删除凭据记录仍是轮换路径。`dsh-web-app` 每个进程只打印并打开一次 query 中带该令牌的普通根 URL。`frontend-static` 请求 Connection 授权 index 响应：只有 `GET /?token=...` 会把令牌交换为 cookie，再重定向到干净的 `/`；API 路径和 Authorization header 都不接受该令牌。不匹配的令牌如果同时带有有效 cookie，会重定向到干净的 `/`。缺失与无效凭据得到同一份最小 401 响应。非 index 静态资产保持公开。
 
-cookie 是签名且绑定 authority 的 bearer。确定性名称与签名 payload 都包含规范化 hostname 和 port，因此同一 Harness home 可以在不同 Web port 运行而不发生 cookie 冲突。payload 在绝对有效期内携带安全整数形式的签发与过期时间；`cookieMaxAgeDays` 默认为 30。cookie 是 host-only、`Path=/`、`HttpOnly`、`SameSite=Strict`。随附服务器使用 loopback HTTP，因此不设置 `Secure`。这里没有 logout 操作或反向代理专用处理。
+cookie 是签名且绑定 authority 的 bearer。确定性名称与签名 payload 都包含规范化 hostname 和 port，因此同一 Harness home 可以在不同 Web port 运行而不发生 cookie 冲突。payload 在绝对有效期内携带安全整数形式的签发与过期时间；`cookieMaxAgeDays` 默认为 30。cookie 是 host-only、`Path=/`、`HttpOnly`、`SameSite=Strict`。随附服务器使用 loopback HTTP，因此不设置 `Secure`。这里没有 logout 操作。
 
 HMAC 密钥与启动令牌同住在 `ctx.credentials` 中位于 `client-connection/browser-session` 的版本化 `grant` 记录里；本地提供方将其存入 `$DSH_HOME/.credentials.yaml`。payload 版本 2 同时携带两个值；版本 1 记录就地升级，保留其密钥使既有 cookie 继续有效。Connection 在激活期间加载或创建该记录，并保留两个值以同步校验请求。每次激活还会把纯文本令牌重新记录到固定的 Harness home 路径 `$DSH_HOME/web-token`（0600 权限，尽力而为——写失败只上报、绝不阻断服务器），脚本与探针因此从文件系统读取令牌，无需解析进程输出。持久记录发生变化后，当前 Connection 继续使用已加载的值；下一次激活会加载替换记录或创建缺失记录，因此删除记录并重启进程会撤销全部既有 cookie 并轮换令牌。无效 owner payload 会明确失败，而不是被覆盖。未过期 cookie 则能在相同 authority 上跨重启继续有效。
 
