@@ -158,7 +158,6 @@ export interface ContentBlockMap {
   'image': ImageBlock
   'file': FileBlock
   'tool-call': ToolCallBlock
-  'tool-result': ToolResultBlock
   'object-ref': ObjectRefBlock
   'tool-addition': ToolAdditionBlock
   'tool-removal': ToolRemovalBlock
