@@ -26,18 +26,23 @@ import { assertNever } from '@deepseek-ai/dsh-util-values'
 const SCHEDULER_SYMBOL_DESCRIPTION = '@deepseek-ai/dsh-tools.scheduler'
 
 function schedulerOf(tools: unknown): ToolRuntimeScheduler {
+  const candidates: ToolRuntimeScheduler[] = []
   if (tools !== null && typeof tools === 'object') {
+    const scoped = tools as Partial<Record<symbol, ToolRuntimeScheduler>>
     for (const symbol of Object.getOwnPropertySymbols(tools)) {
       if (symbol.description === SCHEDULER_SYMBOL_DESCRIPTION) {
-        return (tools as Record<symbol, ToolRuntimeScheduler>)[symbol]
+        const hit: ToolRuntimeScheduler | undefined = scoped[symbol]
+        if (hit !== undefined) candidates.push(hit)
       }
     }
+    const fallback: ToolRuntimeScheduler | undefined = scoped[TOOL_RUNTIME_SCHEDULER]
+    if (fallback !== undefined) candidates.push(fallback)
   }
-  const fallback = (tools as Record<symbol, ToolRuntimeScheduler>)[TOOL_RUNTIME_SCHEDULER]
-  if (fallback === undefined) {
+  const scheduler = candidates[0]
+  if (scheduler === undefined) {
     throw new Error(`agent-loop: ctx.tools 没有 scheduler（symbol "${SCHEDULER_SYMBOL_DESCRIPTION}" 与本实例 symbol 均未命中）`)
   }
-  return fallback
+  return scheduler
 }
 
 /** One tool call after argument parsing, ready to schedule. */
