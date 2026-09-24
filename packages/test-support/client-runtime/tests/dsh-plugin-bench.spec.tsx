@@ -26,8 +26,9 @@ import { dispatchReferenceOpen, normalizeReference, type ReferenceOpenContext } 
 import { apply as pluginApply, createApply as pluginCreateApply, inject as pluginInject } from '../../../../../externals/dsh-resource-sidebar/src/client/index.ts'
 import { DemoResourceCenter } from '../../../../../externals/dsh-resource-sidebar/src/demo-provider.ts'
 import { demoObjectAddress } from '../../../../../externals/dsh-resource-sidebar/src/address.ts'
-// 0924 Phase 4：EH 侧 ObjectProjectionV1 通用渲染 + presentation contribution
+// 0924 Phase 4：EH 侧 ObjectProjectionV1 通用渲染 + presentation contribution + 真 provider
 import { ProjectionSectionList, registerProjectionPresentation } from '../../../../../emergency-harness/packages/dsh-eh-object-sidebar/src/client/presentation.mjs'
+import { createProjectionResourceProvider } from '../../../../../emergency-harness/packages/dsh-eh-object-sidebar/src/client/providers.mjs'
 
 const SESSION = 's-bench' as SessionId
 
@@ -161,23 +162,27 @@ describe('0924 插件线 Vertical Slice（reference/open → 桥 → sidebar →
       await h2.runtime.mount({
         inject: ['resources'],
         apply: (ctx) => {
-          ctx.resources.register({
+          // 真 provider（EH createProjectionResourceProvider）+ fetchImpl stub：
+          // 验证 /api/dev-objects 语义 → RemoteResult 帧 → useResource 全链
+          ctx.resources.register(createProjectionResourceProvider({
             protocol: 'dh-architecture',
-            open: (address: string, ctxOpen: { signal: AbortSignal }) => (async function* () {
-              if (address === ARCH && !ctxOpen.signal.aborted) {
-                yield {
-                  ok: true as const,
-                  value: {
-                    title: '架构投影',
-                    sections: [
-                      { kind: 'summary', title: '摘要', body: 'architecture body 文本' },
-                      { kind: 'verification', title: '验证', items: ['断言一'] },
-                    ],
-                  },
-                }
-              }
-            })(),
-          })
+            endpoint: '/api/dev-objects/architecture',
+            buildQuery: () => '',
+            fetchImpl: (async () => ({
+              ok: true,
+              json: async () => ({
+                ok: true,
+                authority: 'dev-objects',
+                projection: {
+                  title: '架构投影',
+                  sections: [
+                    { kind: 'summary', title: '摘要', body: 'architecture body 文本' },
+                    { kind: 'verification', title: '验证', items: ['断言一'] },
+                  ],
+                },
+              }),
+            })) as unknown as typeof globalThis.fetch,
+          }))
         },
       })
       registerProjectionPresentation(h2.runtime.ctx, {
