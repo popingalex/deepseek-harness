@@ -790,8 +790,9 @@ export function SessionNodeItem({
           )}
         </span>
       )}
-      {!(row.blank && groupInfo === undefined)
-        && renderSlot('sidebar.session.badge', { sessionId: node.id, title })}
+      {/* EH badge rides INSIDE the title cell: upstream's leading cell asserts
+          direct adjacency to the title, so the chip renders inline before the
+          text rather than as a sibling. */}
       <span
         ref={titleRef}
         className={css.title}
@@ -799,6 +800,8 @@ export function SessionNodeItem({
           ? undefined
           : (e) => { e.stopPropagation(); onRenameRequest(node.id, row.title) }}
       >
+        {!(row.blank && groupInfo === undefined)
+          && renderSlot('sidebar.session.badge', { sessionId: node.id, title })}
         {title}
       </span>
       {groupMembers !== undefined && groupMembers.length > 0 && (
