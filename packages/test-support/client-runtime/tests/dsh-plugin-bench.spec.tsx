@@ -27,8 +27,8 @@ import { apply as pluginApply, createApply as pluginCreateApply, inject as plugi
 import { DemoResourceCenter } from '../../../../../externals/dsh-resource-sidebar/src/demo-provider.ts'
 import { demoObjectAddress } from '../../../../../externals/dsh-resource-sidebar/src/address.ts'
 // 0924 Phase 4：EH 侧 ObjectProjectionV1 通用渲染 + presentation contribution + 真 provider
-import { ProjectionSectionList, registerProjectionPresentation } from '../../../../../emergency-harness/packages/dsh-eh-object-sidebar/src/client/presentation.mjs'
-import { createProjectionResourceProvider } from '../../../../../emergency-harness/packages/dsh-eh-object-sidebar/src/client/providers.mjs'
+import { ProjectionSectionList, registerProjectionPresentation, registerReferenceDetailPresentation } from '../../../../../emergency-harness/packages/dsh-eh-object-sidebar/src/client/presentation.mjs'
+import { createProjectionResourceProvider, createResolveReferenceProvider } from '../../../../../emergency-harness/packages/dsh-eh-object-sidebar/src/client/providers.mjs'
 
 const SESSION = 's-bench' as SessionId
 
@@ -199,6 +199,52 @@ describe('0924 插件线 Vertical Slice（reference/open → 桥 → sidebar →
     expect(h2.view.container.textContent).toContain('断言一')
     expect(h2.view.container.querySelector('[data-resource-value]')).toBeNull() // EH contribution 当选，JSON fallback 不渲染
     await h2.runtime.dispose()
+  })
+
+  it('Phase 4 第二刀：dh-object resolve 侧经 resource.presentation 渲染通用分区', async () => {
+    const KB = 'dsh-resource://dh-object/knowledge/KB-0002'
+    const h3 = await mountBench({ bPatterns: ['dsh-resource://dh-object/**'] })
+    await act(async () => {
+      await h3.runtime.mount({
+        inject: ['resources'],
+        apply: (ctx) => {
+          ctx.resources.register(createResolveReferenceProvider({
+            endpoint: '/api/reference/resolve',
+            detail: 'sidebar',
+            fetchImpl: (async () => ({
+              ok: true,
+              json: async () => ({
+                found: true,
+                type: 'knowledge',
+                sidebar: {
+                  header: { title: 'KB-0002 知识', id: 'KB-0002' },
+                  summary: '知识正文摘要',
+                  properties: [{ label: '来源', value: 'TDB' }],
+                  relations: [{ ref: 'knowledge:KB-0001', label: '前置', title: '前置知识' }],
+                },
+              }),
+            })) as unknown as typeof globalThis.fetch,
+          }))
+        },
+      })
+      registerReferenceDetailPresentation(h3.runtime.ctx, {
+        claim: (address: string) => {
+          if (!address.startsWith('dsh-resource://dh-object/')) return false
+          const kind = address.slice('dsh-resource://dh-object/'.length).split('/')[0] ?? ''
+          return kind !== 'work' && kind !== 'issue'
+        },
+      })
+    })
+    const result = await dispatch(h3.runtime, KB)
+    expect(result).toEqual({ handled: true })
+    await waitFor(() => {
+      expect(h3.view.container.querySelector('[data-eh-reference-presentation]')).not.toBeNull()
+    })
+    expect(h3.view.container.textContent).toContain('知识正文摘要')
+    expect(h3.view.container.textContent).toContain('TDB')
+    expect(h3.view.container.textContent).toContain('前置知识')
+    expect(h3.view.container.querySelector('[data-resource-value]')).toBeNull()
+    await h3.runtime.dispose()
   })
 
   it('插件卸载 → 桥注销，dispatch 回落 no-op（N15）', async () => {
