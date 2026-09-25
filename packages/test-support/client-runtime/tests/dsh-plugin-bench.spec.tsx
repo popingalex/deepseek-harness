@@ -30,13 +30,14 @@ import {
   type ReferenceActivation,
   type ReferenceOpenContext,
 } from '../../../../../externals/dsh-reference-renderer/src/index.ts'
-import { apply as pluginApply, inject as pluginInject } from '../../../../../externals/dsh-resource-sidebar/src/client/index.ts'
-import { DemoResourceCenter } from '../../../../../externals/dsh-resource-sidebar/src/demo-provider.ts'
+import { apply as pluginApply, createApply as pluginCreateApply, inject as pluginInject } from '../../../../../externals/dsh-resource-sidebar/src/client/index.ts'
+import { DemoResourceCenter, demoFixturePresentation } from '../../../../../externals/dsh-resource-sidebar/src/demo-provider.ts'
 import { demoObjectAddress } from '../../../../../externals/dsh-resource-sidebar/src/address.ts'
+import type { Context } from '@deepseek-ai/cordis'
 
 const SESSION = 's-bench' as SessionId
 
-async function mountBench() {
+async function mountBench(opts: { apply?: (ctx: Context) => void; skipDemoCenter?: boolean } = {}) {
   const runtime = await SlotTestRuntime.create()
   runtimes.push(runtime)
   runtime.ctx.provide('layout', { openRightbar: vi.fn(), closeRightbar: vi.fn() } as never)
@@ -52,10 +53,13 @@ async function mountBench() {
   await runtime.sessions.add({ id: SESSION })
   const reference = runtime.sessions.retainFor(runtime.ctx, SESSION, { source: 'mainView' })
   await runtime.mount({ inject: [...resourcesInject], apply: resourcesApply })
-  const center = new DemoResourceCenter()
-  await runtime.mount({ inject: ['resources'], apply: (ctx) => { ctx.resources.register(center.provider) } })
+  let center: DemoResourceCenter | undefined
+  if (opts.skipDemoCenter !== true) {
+    center = new DemoResourceCenter()
+    await runtime.mount({ inject: ['resources'], apply: (ctx) => { ctx.resources.register(center!.provider) } })
+  }
   await runtime.mount({ inject: [...sidebarInject], apply: sidebarApply })
-  const feature = await runtime.mount({ inject: [...pluginInject], apply: pluginApply })
+  const feature = await runtime.mount({ inject: [...pluginInject], apply: opts.apply ?? pluginApply })
   const view = runtime.renderSlot('rightbar', { width: 420, viewportWidth: 1440, canShow: true }, { session: reference })
   return { runtime, feature, center, controller: runtime.ctx.sidebarRight, view }
 }
@@ -243,3 +247,140 @@ describe('0925 对称 E2E：user 与 agent 引用同构（render/open/failure，
     for (const view of mountedViews.splice(0)) view.unmount()
   })
 })
+
+/* ------------------------------------------------------------------ */
+/*  0925 Phase 6/7：GenUI contribution（§42 只读声明式）+ Actions        */
+/*  （§43 声明式操作 → invoker → Host 权威操作 → 资源流新帧）。          */
+/*  fixture center 经 createApply({demo:{center}}) 注入，bench 全程可控。*/
+/* ------------------------------------------------------------------ */
+
+describe('0925 Phase 6 GenUI：声明式 presentation plan 经 resource.presentation 当选渲染', () => {
+  it('值携带合法 plan → GenUI 渲染白名单词表，fallback 不渲染', async () => {
+    const center = new DemoResourceCenter({ fixture: true })
+    const bench = await mountBench({
+      skipDemoCenter: true,
+      apply: pluginCreateApply({ demo: { center } }),
+    })
+    const result = await dispatch(bench.runtime, 'dsh-ref:demo-object:WI-1')
+    expect(result).toEqual({ handled: true })
+    await waitFor(() => {
+      expect(bench.view.container.querySelector('[data-genui]')).not.toBeNull()
+    })
+    expect(bench.view.container.querySelector('[data-genui-title]')?.textContent).toBe('Demo 对象')
+    expect(bench.view.container.querySelector('[data-genui-field="状态"]')?.textContent).toContain('initial')
+    expect(bench.view.container.textContent).toContain('GenUI 只读展示')
+    expect(bench.view.container.querySelector('[data-resource-value]')).toBeNull()
+    await bench.runtime.dispose()
+  })
+
+  it('权威变更帧 → GenUI 随帧刷新（plan 由 provider 重新生成，§24）', async () => {
+    const center = new DemoResourceCenter({ fixture: true })
+    const bench = await mountBench({
+      skipDemoCenter: true,
+      apply: pluginCreateApply({ demo: { center } }),
+    })
+    await dispatch(bench.runtime, 'dsh-ref:demo-object:WI-1')
+    await waitFor(() => {
+      expect(bench.view.container.querySelector('[data-genui]')).not.toBeNull()
+    })
+    // provider 每帧随权威值重新生成 plan（§24：generated tree ≠ 状态证据）
+    act(() => { center.put('WI-1', { state: 'doing', presentation: demoFixturePresentation('doing') }) })
+    await waitFor(() => {
+      expect(bench.view.container.querySelector('[data-genui-field="状态"]')?.textContent).toContain('doing')
+    })
+    await bench.runtime.dispose()
+  })
+
+  it('未知 kind → fail-closed 标记，payload 内容零渲染', async () => {
+    const center = new DemoResourceCenter({ fixture: true })
+    const bench = await mountBench({
+      skipDemoCenter: true,
+      apply: pluginCreateApply({ demo: { center } }),
+    })
+    await dispatch(bench.runtime, 'dsh-ref:demo-object:WI-1')
+    await waitFor(() => {
+      expect(bench.view.container.querySelector('[data-genui]')).not.toBeNull()
+    })
+    act(() => { center.put('WI-1', { presentation: { sections: [{ kind: 'mystery', payload: 'SECRET' }] } }) })
+    await waitFor(() => {
+      expect(bench.view.container.querySelector('[data-genui-unsupported]')).not.toBeNull()
+    })
+    expect(bench.view.container.textContent).not.toContain('SECRET')
+    await bench.runtime.dispose()
+  })
+})
+
+describe('0925 Phase 7 Actions：声明式操作 → invoker → 权威流刷新 / 失败诚实', () => {
+  it('点击声明动作 → invoker 执行 → 权威帧回来 → GenUI 更新', async () => {
+    const center = new DemoResourceCenter({ fixture: true })
+    const bench = await mountBench({
+      skipDemoCenter: true,
+      apply: pluginCreateApply({ demo: { center } }),
+    })
+    await dispatch(bench.runtime, 'dsh-ref:demo-object:WI-1')
+    await waitFor(() => {
+      expect(bench.view.container.querySelector('[data-resource-action="advance"]')).not.toBeNull()
+    })
+    expect(bench.view.container.querySelector('[data-resource-action="advance"]')?.getAttribute('data-resource-operation')).toBe('demo.advance')
+    fireEvent.click(bench.view.container.querySelector('[data-resource-action="advance"]')!)
+    await waitFor(() => {
+      expect(bench.view.container.querySelector('[data-genui-field="状态"]')?.textContent).toContain('doing')
+    })
+    fireEvent.click(bench.view.container.querySelector('[data-resource-action="archive"]')!)
+    await waitFor(() => {
+      expect(bench.view.container.querySelector('[data-genui-field="状态"]')?.textContent).toContain('archived')
+    })
+    await bench.runtime.dispose()
+  })
+
+  it('终态后再点 advance → invoker false → 行内诚实报错，状态不变', async () => {
+    const center = new DemoResourceCenter({ fixture: true })
+    center.invoke('WI-1', 'advance')
+    center.invoke('WI-1', 'advance')
+    center.invoke('WI-1', 'advance') // → done
+    const bench = await mountBench({
+      skipDemoCenter: true,
+      apply: pluginCreateApply({ demo: { center } }),
+    })
+    await dispatch(bench.runtime, 'dsh-ref:demo-object:WI-1')
+    await waitFor(() => {
+      expect(bench.view.container.querySelector('[data-genui-field="状态"]')?.textContent).toContain('done')
+    })
+    fireEvent.click(bench.view.container.querySelector('[data-resource-action="advance"]')!)
+    await waitFor(() => {
+      expect(bench.view.container.querySelector('[data-resource-action-error]')).not.toBeNull()
+    })
+    expect(bench.view.container.querySelector('[data-genui-field="状态"]')?.textContent).toContain('done')
+    await bench.runtime.dispose()
+  })
+
+  it('协议无 invoker（demo:false + 外部 center 声明动作）→ 点击诚实报错，零执行', async () => {
+    const center = new DemoResourceCenter()
+    center.put('WI-1', { availableActions: [{ id: 'biz', label: '业务操作', operation: 'biz.do' }] })
+    const bench = await mountBench({
+      skipDemoCenter: true,
+      apply: pluginCreateApply({ patterns: ['dsh-resource://demo-object/**'], demo: false }),
+    })
+    // demo:false → 本 apply 不注册 provider；bench 自带 center 仍由 mountBench 注册
+    await runtimeRegister(bench.runtime, center)
+    await dispatch(bench.runtime, 'dsh-ref:demo-object:WI-1')
+    await waitFor(() => {
+      expect(bench.view.container.querySelector('[data-resource-action="biz"]')).not.toBeNull()
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    fireEvent.click(bench.view.container.querySelector('[data-resource-action="biz"]')!)
+    await waitFor(() => {
+      expect(bench.view.container.querySelector('[data-resource-action-error]')).not.toBeNull()
+    })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('no invoker registered for protocol "demo-object"'))
+    warn.mockRestore()
+    await bench.runtime.dispose()
+  })
+})
+
+/** 向已 mount 的 runtime 补注册一个 provider（bench 局部场景用）。 */
+async function runtimeRegister(runtime: SlotTestRuntime, center: DemoResourceCenter): Promise<void> {
+  await act(async () => {
+    await runtime.mount({ inject: ['resources'], apply: (ctx) => { ctx.resources.register(center.provider) } })
+  })
+}
