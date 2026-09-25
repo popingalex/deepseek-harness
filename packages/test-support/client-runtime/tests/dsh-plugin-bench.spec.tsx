@@ -268,7 +268,7 @@ describe('0925 Phase 6 GenUI：声明式 presentation plan 经 resource.presenta
     })
     expect(bench.view.container.querySelector('[data-genui-title]')?.textContent).toBe('Demo 对象')
     expect(bench.view.container.querySelector('[data-genui-field="状态"]')?.textContent).toContain('initial')
-    expect(bench.view.container.textContent).toContain('GenUI 只读展示')
+    expect(bench.view.container.textContent).toContain('GenUI 展示')
     expect(bench.view.container.querySelector('[data-resource-value]')).toBeNull()
     await bench.runtime.dispose()
   })
