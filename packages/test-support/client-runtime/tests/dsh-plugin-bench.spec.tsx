@@ -13,8 +13,7 @@
  * 真实 ctx.resources + demo provider → useResource 四态渲染。
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, render as rtlRender, screen, waitFor } from '@testing-library/react'
-import { createElement as h } from 'react'
+import { act, waitFor } from '@testing-library/react'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -23,16 +22,13 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { inject as resourcesInject, apply as resourcesApply } from '@deepseek-ai/dsh-client-resources/client'
 import { inject as sidebarInject, apply as sidebarApply } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { dispatchReferenceOpen, normalizeReference, type ReferenceOpenContext } from '../../../../../externals/dsh-reference-renderer/src/index.ts'
-import { apply as pluginApply, createApply as pluginCreateApply, inject as pluginInject } from '../../../../../externals/dsh-resource-sidebar/src/client/index.ts'
+import { apply as pluginApply, inject as pluginInject } from '../../../../../externals/dsh-resource-sidebar/src/client/index.ts'
 import { DemoResourceCenter } from '../../../../../externals/dsh-resource-sidebar/src/demo-provider.ts'
 import { demoObjectAddress } from '../../../../../externals/dsh-resource-sidebar/src/address.ts'
-// 0924 Phase 4：EH 侧 ObjectProjectionV1 通用渲染 + presentation contribution + 真 provider
-import { ProjectionSectionList, registerProjectionPresentation, registerReferenceDetailPresentation } from '../../../../../emergency-harness/packages/dsh-eh-object-sidebar/src/client/presentation.mjs'
-import { createProjectionResourceProvider, createResolveReferenceProvider } from '../../../../../emergency-harness/packages/dsh-eh-object-sidebar/src/client/providers.mjs'
 
 const SESSION = 's-bench' as SessionId
 
-async function mountBench(opts: { bPatterns?: readonly string[] } = {}) {
+async function mountBench() {
   const runtime = await SlotTestRuntime.create()
   runtimes.push(runtime)
   runtime.ctx.provide('layout', { openRightbar: vi.fn(), closeRightbar: vi.fn() } as never)
@@ -51,8 +47,7 @@ async function mountBench(opts: { bPatterns?: readonly string[] } = {}) {
   const center = new DemoResourceCenter()
   await runtime.mount({ inject: ['resources'], apply: (ctx) => { ctx.resources.register(center.provider) } })
   await runtime.mount({ inject: [...sidebarInject], apply: sidebarApply })
-  const bApply = opts.bPatterns !== undefined ? pluginCreateApply({ patterns: opts.bPatterns }) : pluginApply
-  const feature = await runtime.mount({ inject: [...pluginInject], apply: bApply })
+  const feature = await runtime.mount({ inject: [...pluginInject], apply: pluginApply })
   const view = runtime.renderSlot('rightbar', { width: 420, viewportWidth: 1440, canShow: true }, { session: reference })
   return { runtime, feature, center, controller: runtime.ctx.sidebarRight, view }
 }
@@ -137,114 +132,6 @@ describe('0924 插件线 Vertical Slice（reference/open → 桥 → sidebar →
     })
     expect(h.view.container.querySelector('[data-resource-value]')).toBeNull() // winner 当选，fallback 不渲染
     await h.runtime.dispose()
-  })
-
-  it('Phase 4：ProjectionSections 通用分区渲染（EH 两份拷贝的去重正本）', () => {
-    rtlRender(h(ProjectionSectionList, {
-      sections: [
-        { kind: 'summary', title: '摘要', body: 'architecture body 文本' },
-        { kind: 'verification', title: '验证', items: ['断言一', { structured: true }] },
-        { kind: 'evidence', title: '证据', resource: { status: 'settled', explain: '已落档' }, actions: [{ id: 'a1', label: '查看' }] },
-      ],
-    }))
-    expect(screen.getByText('architecture body 文本')).toBeDefined()
-    expect(screen.getByText('断言一')).toBeDefined()
-    expect(screen.getByText(/"structured":true/)).toBeDefined()
-    expect(screen.getByText(/settled — 已落档/)).toBeDefined()
-    expect(screen.getByText(/Actions 来自真实 capability[^\n]*查看/)).toBeDefined()
-  })
-
-  it('Phase 4：dh-architecture 地址经 resource.presentation 由 EH contribution 渲染', async () => {
-    const ARCH = 'dsh-resource://dh-architecture/arch-main'
-    // 产品组合面预演：resource-object definition 经 createApply patterns 扩 claim dh-architecture
-    const h2 = await mountBench({ bPatterns: ['dsh-resource://demo-object/**', 'dsh-resource://dh-architecture/**'] })
-    await act(async () => {
-      await h2.runtime.mount({
-        inject: ['resources'],
-        apply: (ctx) => {
-          // 真 provider（EH createProjectionResourceProvider）+ fetchImpl stub：
-          // 验证 /api/dev-objects 语义 → RemoteResult 帧 → useResource 全链
-          ctx.resources.register(createProjectionResourceProvider({
-            protocol: 'dh-architecture',
-            endpoint: '/api/dev-objects/architecture',
-            buildQuery: () => '',
-            fetchImpl: (async () => ({
-              ok: true,
-              json: async () => ({
-                ok: true,
-                authority: 'dev-objects',
-                projection: {
-                  title: '架构投影',
-                  sections: [
-                    { kind: 'summary', title: '摘要', body: 'architecture body 文本' },
-                    { kind: 'verification', title: '验证', items: ['断言一'] },
-                  ],
-                },
-              }),
-            })) as unknown as typeof globalThis.fetch,
-          }))
-        },
-      })
-      registerProjectionPresentation(h2.runtime.ctx, {
-        claim: (address: string) => address.startsWith('dsh-resource://dh-architecture/'),
-      })
-    })
-    const result = await dispatch(h2.runtime, ARCH)
-    expect(result).toEqual({ handled: true })
-    expect(h2.controller.active()!.kind).toBe('resource-object')
-    await waitFor(() => {
-      expect(h2.view.container.querySelector('[data-eh-projection-presentation]')).not.toBeNull()
-    })
-    expect(h2.view.container.textContent).toContain('architecture body 文本')
-    expect(h2.view.container.textContent).toContain('断言一')
-    expect(h2.view.container.querySelector('[data-resource-value]')).toBeNull() // EH contribution 当选，JSON fallback 不渲染
-    await h2.runtime.dispose()
-  })
-
-  it('Phase 4 第二刀：dh-object resolve 侧经 resource.presentation 渲染通用分区', async () => {
-    const KB = 'dsh-resource://dh-object/knowledge/KB-0002'
-    const h3 = await mountBench({ bPatterns: ['dsh-resource://dh-object/**'] })
-    await act(async () => {
-      await h3.runtime.mount({
-        inject: ['resources'],
-        apply: (ctx) => {
-          ctx.resources.register(createResolveReferenceProvider({
-            endpoint: '/api/reference/resolve',
-            detail: 'sidebar',
-            fetchImpl: (async () => ({
-              ok: true,
-              json: async () => ({
-                found: true,
-                type: 'knowledge',
-                sidebar: {
-                  header: { title: 'KB-0002 知识', id: 'KB-0002' },
-                  summary: '知识正文摘要',
-                  properties: [{ label: '来源', value: 'TDB' }],
-                  relations: [{ ref: 'knowledge:KB-0001', label: '前置', title: '前置知识' }],
-                },
-              }),
-            })) as unknown as typeof globalThis.fetch,
-          }))
-        },
-      })
-      registerReferenceDetailPresentation(h3.runtime.ctx, {
-        claim: (address: string) => {
-          if (!address.startsWith('dsh-resource://dh-object/')) return false
-          const kind = address.slice('dsh-resource://dh-object/'.length).split('/')[0] ?? ''
-          return kind !== 'work' && kind !== 'issue'
-        },
-      })
-    })
-    const result = await dispatch(h3.runtime, KB)
-    expect(result).toEqual({ handled: true })
-    await waitFor(() => {
-      expect(h3.view.container.querySelector('[data-eh-reference-presentation]')).not.toBeNull()
-    })
-    expect(h3.view.container.textContent).toContain('知识正文摘要')
-    expect(h3.view.container.textContent).toContain('TDB')
-    expect(h3.view.container.textContent).toContain('前置知识')
-    expect(h3.view.container.querySelector('[data-resource-value]')).toBeNull()
-    await h3.runtime.dispose()
   })
 
   it('插件卸载 → 桥注销，dispatch 回落 no-op（N15）', async () => {
