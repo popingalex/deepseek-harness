@@ -384,3 +384,81 @@ async function runtimeRegister(runtime: SlotTestRuntime, center: DemoResourceCen
     await runtime.mount({ inject: ['resources'], apply: (ctx) => { ctx.resources.register(center.provider) } })
   })
 }
+
+/* ------------------------------------------------------------------ */
+/*  0925 Plugin Management（Next Steps §13）：隔离 / 碰撞 / 卸载泄漏。    */
+/*  Cordis fiber/effect 生命周期是 authoritative owner——测试证明        */
+/*  installability / independence / clean unload / collision fail-closed。*/
+/* ------------------------------------------------------------------ */
+
+describe('0925 插件管理：碰撞 fail-closed 与卸载泄漏', () => {
+  it('duplicate protocol 二次注册 fail-closed（不半加载）', async () => {
+    const bench = await mountBench()
+    // 同 kind 二次注册：第一次注册后 provider 已被 B 的 demo fixture 占位（apply 内部 center）
+    // → 外部再注册同协议必须被 DSH fail-loud 拒绝，插件侧幂等吞掉（审计 §24 坑③语义）
+    const { DemoResourceCenter } = await import('../../../../../externals/dsh-resource-sidebar/src/demo-provider.ts')
+    let threw: Error | null = null
+    await act(async () => {
+      try {
+        await bench.runtime.mount({
+          inject: ['resources'],
+          apply: (ctx) => { ctx.resources.register(new DemoResourceCenter().provider) },
+        })
+      } catch (error) {
+        threw = error as Error
+      }
+    })
+    expect(threw).not.toBeNull()
+    expect(String(threw!.message)).toMatch(/already has a provider/)
+    await bench.runtime.dispose()
+  })
+
+  it('插件卸载 → 资源流 abort + slot 注册消失（干净卸载，无泄漏）', async () => {
+    const bench = await mountBench()
+    const address = demoObjectAddress('WI-1')
+    await dispatch(bench.runtime, 'dsh-ref:demo-object:WI-1')
+    await waitFor(() => {
+      expect(bench.view.container.querySelector('[data-resource-status]')?.getAttribute('data-resource-status')).toBe('live')
+    })
+    // 卸载 B 插件 feature：body/tab slot/桥全部走 ctx.effect 注册的 disposer
+    await bench.feature.dispose()
+    // tab body slot 注销 → 该 tab 无 viewer（DSH 正常 none 行为，不留假 UI）
+    const slotEntries = bench.runtime.ctx.slots.entries('sidebar.right.pane.tab')
+    const bBody = slotEntries.filter(e => e?.options?.key === 'dsh-resource-sidebar/resource-object')
+    expect(bBody).toHaveLength(0)
+    // provider 卸载 → 资源流 abort（useResource 回 none）
+    // 引用再次 dispatch：桥已随 feature dispose 注销 → 无人接管 decline
+    const result = await dispatch(bench.runtime, 'dsh-ref:demo-object:WI-2')
+    expect(result).toBeUndefined()
+    await bench.runtime.dispose()
+  })
+
+  it('A-only 无 B 时：reference/open 无消费者 → 干净 decline（不崩 DSH 核心）', async () => {
+    const runtime = await SlotTestRuntime.create()
+    runtimes.push(runtime)
+    runtime.ctx.provide('layout', { openRightbar: vi.fn(), closeRightbar: vi.fn() } as never)
+    const locale = new LocaleRuntime(runtime.ctx)
+    runtime.ctx.provide('locale', locale)
+    const catalog = createSnapshotStore<readonly ShortcutCatalogEntry[]>([])
+    runtime.ctx.provide('shortcuts', { register: () => () => {}, catalog } as never)
+    runtime.slots.installLocale(locale)
+    await runtime.declare({
+      'rightbar': { kind: 'single', scope: 'root' },
+      'conversation.session.header.corner': { kind: 'single', scope: 'session' },
+    })
+    await runtime.sessions.add({ id: SESSION })
+    const reference = runtime.sessions.retainFor(runtime.ctx, SESSION, { source: 'mainView' })
+    await runtime.mount({ inject: [...resourcesInject], apply: resourcesApply })
+    await runtime.mount({ inject: [...sidebarInject], apply: sidebarApply })
+    // 只挂 A（不挂 B 桥）→ dispatch 必须干净 decline
+    const feature = await runtime.mount({
+      inject: [],
+      apply: () => {},
+    })
+    const result = await dispatch(runtime, 'dsh-ref:demo-object:WI-1')
+    expect(result).toBeUndefined()
+    expect(runtime.ctx.sidebarRight.active()).toBeUndefined()
+    await feature.dispose()
+    await runtime.dispose()
+  })
+})

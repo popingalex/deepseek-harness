@@ -37,6 +37,43 @@ export interface PluginInventorySettingsTabInjected {
 }
 type PluginFiberPhase = PluginInventoryEntry['fiberPhase']
 
+/** 插件清单声明（package.json dsh.plugin，Next Steps §3）——经 pkg 入口静态可达时展示。 */
+interface PluginManifestDeclaration {
+  readonly manifestVersion?: 1
+  readonly id?: string
+  readonly role?: string
+  readonly requiredServices?: readonly string[]
+  readonly optionalServices?: readonly string[]
+  readonly ownedResourceProtocols?: readonly string[]
+  readonly ownedSidebarTabKinds?: readonly string[]
+  readonly capabilities?: readonly string[]
+  readonly productionDefault?: boolean
+}
+
+/** 读一个插件包的 dsh.plugin 声明（无则 undefined；只读纯 JSON，无副作用）。 */
+function readManifestDeclaration(moduleName: string): PluginManifestDeclaration | undefined {
+  // 经 module table 拿包自己的 package.json（loader 对 package.json 子路径的
+  // 解析行为各 entry 不同——拿不到就静默无 manifest 行，不伪造）。
+  try {
+    const loader = (globalThis as { __ModuleLoader__?: Record<string, unknown> }).__ModuleLoader__
+    if (loader === undefined) return undefined
+    for (const key of ['resolve', 'get', 'require']) {
+      const fn = loader[key]
+      if (typeof fn !== 'function') continue
+      try {
+        const pkg = (fn as (name: string) => unknown).call(loader, `${moduleName}/package.json`)
+        if (pkg !== undefined && pkg !== null && typeof pkg === 'object') {
+          const dsh = (pkg as { dsh?: { plugin?: PluginManifestDeclaration } }).dsh
+          if (dsh?.plugin !== undefined) return dsh.plugin
+        }
+      } catch { /* 尝试下一个方法 */ }
+    }
+    return undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** Full component props assembled by the Settings slot renderer. */
 export type PluginInventorySettingsTabProps =
   PropsRuntime<'settings.plugins.tab'>
@@ -158,6 +195,28 @@ function PluginCard({
       {open ? <div className={css.cardDetails} id={detailId}>{children}</div> : null}
     </li>
   )
+}
+
+/** dsh.plugin 声明 → CardFacts 行（Owner Ledger 思路：依赖/协议/槽位/能力，§6）。
+ *  客户端经 loader 无法读宿主 package.json（module table 无 resolve）——清单由
+ *  宿主在 inventory meta 的 `dsh.plugin` 字段投影（meta 与 PluginLocalizedMeta 同
+ *  级，纯声明透传，不改 Cordis lifecycle truth）。 */
+function manifestFacts(moduleName: string, entry?: PluginInventoryEntry): readonly (readonly [string, ReactNode])[] {
+  const manifest = readManifestDeclaration(moduleName) ?? (entry as unknown as { dsh?: { plugin?: PluginManifestDeclaration } })?.dsh?.plugin
+  if (manifest === undefined) return []
+  const row = (label: string, value: readonly string[] | undefined): (readonly [string, ReactNode])[] =>
+    value !== undefined && value.length > 0
+      ? [[label, <code key={label}>{value.join(', ')}</code>] as const]
+      : []
+  return [
+    ...manifest.role !== undefined ? [['清单角色', manifest.role] as const] : [],
+    ...row('必需服务', manifest.requiredServices),
+    ...row('可选服务', manifest.optionalServices),
+    ...row('资源协议', manifest.ownedResourceProtocols),
+    ...row('Tab 类型', manifest.ownedSidebarTabKinds),
+    ...row('能力', manifest.capabilities),
+    ...manifest.productionDefault !== undefined ? [['生产默认', manifest.productionDefault ? '是' : '否'] as const] : [],
+  ]
 }
 
 /** Detail rows shared by every card: the Loader identity, then labeled facts. */
@@ -413,6 +472,7 @@ export function PluginInventorySettingsTab(
             : [
               [t('configuration'), t(entry.enabled ? 'enabledTag' : 'disabledTag')],
               ...entry.enabled ? [[t('runtime'), phaseLabel(entry.fiberPhase, t)] as const] : [],
+              ...manifestFacts(entry.moduleName, entry),
             ]}
         />
       </PluginCard>
