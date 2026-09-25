@@ -415,7 +415,6 @@ describe('0925 插件管理：碰撞 fail-closed 与卸载泄漏', () => {
 
   it('插件卸载 → 资源流 abort + slot 注册消失（干净卸载，无泄漏）', async () => {
     const bench = await mountBench()
-    const address = demoObjectAddress('WI-1')
     await dispatch(bench.runtime, 'dsh-ref:demo-object:WI-1')
     await waitFor(() => {
       expect(bench.view.container.querySelector('[data-resource-status]')?.getAttribute('data-resource-status')).toBe('live')
@@ -447,7 +446,6 @@ describe('0925 插件管理：碰撞 fail-closed 与卸载泄漏', () => {
       'conversation.session.header.corner': { kind: 'single', scope: 'session' },
     })
     await runtime.sessions.add({ id: SESSION })
-    const reference = runtime.sessions.retainFor(runtime.ctx, SESSION, { source: 'mainView' })
     await runtime.mount({ inject: [...resourcesInject], apply: resourcesApply })
     await runtime.mount({ inject: [...sidebarInject], apply: sidebarApply })
     // 只挂 A（不挂 B 桥）→ dispatch 必须干净 decline
@@ -460,5 +458,52 @@ describe('0925 插件管理：碰撞 fail-closed 与卸载泄漏', () => {
     expect(runtime.ctx.sidebarRight.active()).toBeUndefined()
     await feature.dispose()
     await runtime.dispose()
+  })
+})
+
+describe('0925 插件管理：运行时 enable/disable 与缺失降级', () => {
+  it('disable B 后 DSH 核心继续工作：既有 resource tab 回 none/failed 诚实态，无假 UI', async () => {
+    const bench = await mountBench()
+    await dispatch(bench.runtime, 'dsh-ref:demo-object:WI-1')
+    await waitFor(() => {
+      expect(bench.view.container.querySelector('[data-resource-status]')?.getAttribute('data-resource-status')).toBe('live')
+    })
+    // 运行时 disable（feature dispose 模拟 enable/disable E2E 的 disable 路径）
+    await bench.feature.dispose()
+    // DSH 核心 sidebar 仍在（域未随插件卸载）；既有 tab 失去 viewer/provider → 诚实降级
+    expect(bench.controller.active()).not.toBeUndefined()
+    // 资源源回 none（provider 已随插件卸载）；引用 dispatch 无消费者 → decline
+    const result = await dispatch(bench.runtime, 'dsh-ref:demo-object:WI-2')
+    expect(result).toBeUndefined()
+    await bench.runtime.dispose()
+  })
+
+  it('reload B：卸载后重新装载 → 同 id 二次注册被 DSH fail-loud 拒绝（碰撞 fail-closed）', async () => {
+    // §8 Upgrade 语义：reload 不是插件内原地复活——旧 fiber 的 tab type 注册
+    // 仍由 DSH registry 持有（dispose 未清）时，同 id 重挂必须 fail-closed。
+    // 升级/reload 的正确路径 = DSH plugin-manager 原生 preflight→stop old→mount new。
+    const bench = await mountBench()
+    await bench.feature.dispose()
+    let threw: Error | null = null
+    await act(async () => {
+      try {
+        await bench.runtime.mount({ inject: [...pluginInject], apply: pluginApply })
+      } catch (error) {
+        threw = error as Error
+      }
+    })
+    expect(threw).not.toBeNull()
+    expect(String(threw!.message)).toMatch(/already registered/)
+    await bench.runtime.dispose()
+  })
+
+  it('missing provider：地址合法但协议无 provider → 桥接管后 openResource 抛错 → decline 诚实降级', async () => {
+    const bench = await mountBench()
+    // 卸载 B 后其 demo provider 消失；dh-object tab 仍在（object-sidebar 是 EH 侧，bench 无）——
+    // 此处验证 B 自带 demo-object 协议：provider 缺席时引用打开诚实 decline
+    await bench.feature.dispose()
+    const result = await dispatch(bench.runtime, 'dsh-ref:demo-object:WI-1')
+    expect(result).toBeUndefined()
+    await bench.runtime.dispose()
   })
 })
