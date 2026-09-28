@@ -336,7 +336,9 @@ function sectionMembers(
   const leading: SessionSummary[] = []
   const rest: SessionSummary[] = []
   for (const member of members) {
-    if (member.blank && !member.title) placeholders.push(member)
+    // 0.2.0 起上游原生接管 blank 改名保持（sessionTitle 返回有题标题，无题由
+    // 渲染器本地化 '未命名'）；占位首行规则回归纯 blank 判定。
+    if (member.blank) placeholders.push(member)
     else if (!archived.has(member.id) && pinned.has(member.id)) leading.push(member)
     else rest.push(member)
   }
@@ -350,10 +352,9 @@ function sectionMembers(
  * empty title for localization and does not match a directory-name title search.
  */
 function sessionTitle(session: SessionSummary): string {
-  // EH：blank 改名保留语义（有持久标题即显示），未命名走渲染器本地化标签；
-  // 上游 0.2.0 起对标题做 trim。
-  if (session.blank) return session.title?.trim() ?? ''
-  return session.displayTitle
+  // 0.2.0 契约：blank 树节点标题恒空（渲染器按 blank 旗标换本地化标签；
+  // EH 团队草稿的显示标签走 grouping provider，不依赖此处）。
+  return session.blank ? '' : (session.title?.trim() ?? '')
 }
 
 /** Build one group without projecting session lineage into presentation. */
