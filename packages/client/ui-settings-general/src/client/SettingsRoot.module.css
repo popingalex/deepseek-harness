@@ -67,9 +67,10 @@
   justify-content: center;
 }
 
+/* The full-viewport overlay blocks background clicks above the painted mask too. */
 .mask {
   position: absolute;
-  inset: 0;
+  inset: var(--dsh-frame-chrome-top, 0px) 0 0;
   background: var(--dsw-alias-bg-mask-1);
   backdrop-filter: var(--dsw-mask-blur);
 }
@@ -88,7 +89,7 @@
   z-index: 1;
   display: flex;
   width: min(1200px, calc(100vw - 64px));
-  height: min(860px, calc(100vh - 2 * max(24px, var(--dsh-frame-top-clearance, 24px))));
+  height: min(860px, calc(100vh - 2 * max(24px, var(--dsh-frame-overlay-top, 24px))));
   max-width: calc(100vw - 48px);
   border-radius: var(--dsw-radius-panel);
   overflow: hidden;

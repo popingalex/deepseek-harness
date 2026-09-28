@@ -43,7 +43,7 @@ function mainSessionId(list: SessionListState): SessionId | undefined {
 /** One top-level session row in a group or the flat list. */
 export interface SessionNode {
   id: SessionId
-  /** Stored display title; the renderer substitutes the localized New Session label for blank rows. */
+  /** Stored title, or empty; the renderer localizes blank and unnamed row labels. */
   title: string
   /** The provisional blank session (renderer shows the localized New Session title). */
   blank: boolean
@@ -346,10 +346,13 @@ function sectionMembers(
 /**
  * A blank session is the selected Workspace's provisional New Session row;
  * its canonical title never enters search (blank rows are query-excluded)
- * and the renderer localizes its display label.
+ * and the renderer localizes its display label. Unnamed history also yields an
+ * empty title for localization and does not match a directory-name title search.
  */
 function sessionTitle(session: SessionSummary): string {
-  if (session.blank) return session.title ?? ''
+  // EH：blank 改名保留语义（有持久标题即显示），未命名走渲染器本地化标签；
+  // 上游 0.2.0 起对标题做 trim。
+  if (session.blank) return session.title?.trim() ?? ''
   return session.displayTitle
 }
 
