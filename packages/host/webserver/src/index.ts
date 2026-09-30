@@ -116,15 +116,12 @@ function createGzipMiddleware(config: ResolvedConfig): NodeMiddleware {
 }
 
 /**
- * The browser HTTP carrier service. Activation listens immediately. Route
- * registration order does not affect requests because configured named routes
- * must be distinct, and the fallback handler answers anything not yet claimed
- * during startup with 404 until its owner registers. A listen failure rejects
- * initialization, and the boot process reports the failed fiber.
+ *   `0.0.0.0` is deliberately rejected: binding every interface would expose the browser
+ *   control plane to untrusted networks. Bind a specific local/LAN IP or hostname instead.
  */
 export class WebServer extends Service {
   static Config: z<Config> = z.object({
-    host: z.union([z.const('127.0.0.1'), z.const('0.0.0.0')]).required(),
+    host: z.string().min(1).required(),
     port: z.natural().max(65535).required(),
     compression: z.union([z.const('none'), z.const('gzip')]).default(DEFAULT_COMPRESSION),
     compressionLevel: z.number().step(1).min(0).max(9).default(DEFAULT_COMPRESSION_LEVEL),
@@ -152,7 +149,7 @@ export class WebServer extends Service {
     return this.listenedPort
   }
 
-  /** The configured bind host (the loopback or all-interfaces literal). */
+  /** The configured bind host (loopback, a concrete LAN address, or a hostname). */
   get host(): Config['host'] {
     return this.config.host
   }
