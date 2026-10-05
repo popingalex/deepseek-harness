@@ -2,7 +2,7 @@
 /**
  * 0924 Native-First 插件线 Vertical Slice bench（Plugin A + Plugin B）。
  *
- * 被测正本在 emergency-harness 仓 `externals/dsh-reference-renderer` 与
+ * 被测正本在 emergency-harness 仓 `externals/dsh-reference-render` 与
  * `externals/dsh-resource-sidebar`（submodule，相对路径引入源码）。本文件是
  * 跨仓 bench 的落点：审计 §15 裁定 React slot 树组合验证必须在 DSH 自家
  * vitest runner 执行（跨仓 runner 无法内联 DSH lib），属 R8 用户裁决授权的
@@ -29,7 +29,7 @@ import {
   splitWireSegments,
   type ReferenceActivation,
   type ReferenceOpenContext,
-} from '../../../../../externals/dsh-reference-renderer/src/index.ts'
+} from '../../../../../externals/dsh-reference-render/src/index.ts'
 import { apply as pluginApply, createApply as pluginCreateApply, inject as pluginInject } from '../../../../../externals/dsh-resource-sidebar/src/client/index.ts'
 import { DemoResourceCenter, demoFixturePresentation } from '../../../../../externals/dsh-resource-sidebar/src/demo-provider.ts'
 import { demoObjectAddress } from '../../../../../externals/dsh-resource-sidebar/src/address.ts'
