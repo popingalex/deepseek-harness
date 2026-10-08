@@ -131,7 +131,11 @@ function cookieValue(headerValue: string, name: string): string | undefined {
 
 /** Serialize the fixed browser-session attributes; generated names and values are cookie-safe base64url. */
 function sessionCookie(name: string, value: string, expiresAt: number, maxAgeSeconds: number): string {
-  return `${name}=${value}; Max-Age=${String(maxAgeSeconds)}; Path=/; Expires=${new Date(expiresAt).toUTCString()}; HttpOnly; SameSite=Strict`
+  // SameSite=Lax：token 链接常从跨站页面（如 dsh-manager :18120）发起点击导航；
+  // WebKit 对 Strict 的发起方判定会在 303 → ./ 重定向链上丢 cookie（302 后续同站请求
+  // 仍按跨站发起方处理），导致「进入实例」永远 401。Lax 允许顶级 GET 导航携带，安全面等价
+  //（HttpOnly + 权限域绑定 + 签名 audience 不变，POST/XHR 跨站仍不携带）。
+  return `${name}=${value}; Max-Age=${String(maxAgeSeconds)}; Path=/; Expires=${new Date(expiresAt).toUTCString()}; HttpOnly; SameSite=Lax`
 }
 
 function signature(secret: Buffer, body: string): Buffer {
