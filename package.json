@@ -259,6 +259,7 @@
     "vite": "8.0.16",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^4.1.8",
+    "unrun": "^0.3.1",
     "@deepseek-ai/dsh-skill-office": "workspace:*",
     "@deepseek-ai/dsh-tool-workspace-dependencies": "workspace:*"
   }
