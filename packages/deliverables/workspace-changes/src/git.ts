@@ -135,7 +135,17 @@ export async function locateGitWorkspace(
   const directory = await canonicalPath(await scratch())
   const objects = join(directory, 'objects')
   await mkdir(objects, { recursive: true })
-  const excludes = isInside(root, directory) ? [toPosix(relative(root, directory))] : []
+  // Harness runtime state is never product editing: session-side ledgers, knowledge
+  // service stores, skill sync, and turn contracts must stay out of turn change
+  // records regardless of whether the receiving repository ignores them. Defense in
+  // depth on top of repository .gitignore — a repo without the rules still gets a
+  // clean edit record (user ruling 2026-10-09: one requirement change showing eight
+  // runtime files is a category error, like committing credentials).
+  const harnessRuntimeExcludes = ['.dev-harness', '.agents', '.dsh']
+  const excludes = [
+    ...(isInside(root, directory) ? [toPosix(relative(root, directory))] : []),
+    ...harnessRuntimeExcludes,
+  ]
   const env = { GIT_OBJECT_DIRECTORY: objects, GIT_ALTERNATE_OBJECT_DIRECTORIES: repositoryObjects }
   return { root, gitDir, scratch: directory, env, excludes }
 }
